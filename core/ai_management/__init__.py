@@ -18,12 +18,24 @@ from .model_registry import ModelRegistry
 from .model_optimizer import ModelOptimizer
 from .model_performance_monitor import ModelPerformanceMonitor
 from .memory_monitor import MemoryMonitor
+from .adaptive_model_loader import AdaptiveModelLoader
+from .intelligent_model_manager import IntelligentModelManager
+from .lazy_model_loader import LazyModelLoader
+from .memory_monitor import MemoryMonitor
+from .model_optimizer import ModelOptimizer
+from .model_performance_monitor import ModelPerformanceMonitor
+from .model_registry import ModelRegistry
 
 # Optional: define __all__ for explicit public API
 __all__ = [
-    "IntelligentModelManager",
-    "ModelRegistry",
-    "ModelOptimizer",
-    "ModelPerformanceMonitor",
-    "MemoryMonitor",
+    'AdaptiveModelLoader',  # Новый рекомендуемый загрузчик
+    'IntelligentModelManager',
+    'LazyModelLoader',
+    'MemoryMonitor',
+    'ModelOptimizer',
+    'ModelPerformanceMonitor',
+    'ModelRegistry'
 ]
+
+# Глобальный экземпляр для использования в системе
+adaptive_loader = AdaptiveModelLoader()

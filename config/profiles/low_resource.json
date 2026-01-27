@@ -1,0 +1,29 @@
+{
+  "name": "low_resource",
+  "description": "Профиль для устройств с ограниченными ресурсами (ноутбуки без дискретной видеокарты)",
+  "ai": {
+    "embedding_model": "distilbert-base-multilingual-cased",
+    "textgen_model": "gpt2",
+    "translation_model": "facebook/nllb-200-distilled-600M",
+    "whisper_model": "openai/whisper-small",
+    "quantization": "int4",
+    "device": "auto",
+    "max_concurrent_models": 2,
+    "cache_results": true,
+    "batch_processing": true,
+    "cpu_optimization": true
+  },
+  "performance": {
+    "memory_limit_gb": 4.0,
+    "use_disk_cache": true,
+    "disk_cache_size_gb": 2.0,
+    "aggressive_gc": true,
+    "background_tasks_limit": 2
+  },
+  "automation": {
+    "max_concurrent_jobs": 1,
+    "task_queue_size": 5,
+    "auto_pause_on_low_memory": true,
+    "low_memory_threshold_percent": 80
+  }
+}
