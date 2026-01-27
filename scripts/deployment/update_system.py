@@ -203,7 +203,7 @@ class UpdateSystem:
                 raise RuntimeError("Миграции завершились с ошибкой!")
 
     async def _update_dependencies(self, update_root: Path):
-        req_file = update_root / "requirements.txt"
+        req_file = update_root / "requirements-base.txt"
         if not req_file.exists():
             return
         self.logger.info("📦 Обновление зависимостей...")

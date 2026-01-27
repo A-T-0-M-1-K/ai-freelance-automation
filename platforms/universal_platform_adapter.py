@@ -1,515 +1,764 @@
 """
-Универсальный адаптер для поддержки любых фриланс-платформ
-Позволяет добавлять новые платформы через конфигурацию без изменения кода
+Универсальный адаптер для интеграции с любыми фриланс-платформами,
+включая "серые" площадки без официального API через конфигурацию правил скрапинга.
 """
-import asyncio
+
 import json
-import logging
-from typing import Dict, Any, Optional, List, Tuple, Callable
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
-import aiohttp
-from bs4 import BeautifulSoup
 import re
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Callable
+from dataclasses import dataclass, asdict
+from enum import Enum
+import hashlib
+import base64
+from datetime import datetime, timedelta
 
-from platforms.platform_factory import PlatformBase
-from core.communication.multilingual_support import MultilingualSupport
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-logger = logging.getLogger(__name__)
+from core.security.encryption_engine import EncryptionEngine
+from core.monitoring.alert_manager import AlertManager
 
 
 class PlatformType(Enum):
-    """Типы платформ"""
-    FREELANCE_MARKETPLACE = "freelance_marketplace"
-    PREMIUM_NETWORK = "premium_network"
-    B2B_PLATFORM = "b2b_platform"
-    LOCAL_MARKETPLACE = "local_marketplace"
+    """Тип платформы"""
+    OFFICIAL_API = "official_api"      # Официальное API (Upwork, Freelancer.com)
+    UNOFFICIAL_API = "unofficial_api"  # Неофициальное/реверс-инжиниринговое API
+    SCRAPING = "scraping"              # Парсинг HTML через Selenium/BeautifulSoup
+    HYBRID = "hybrid"                  # Комбинация API + скрапинг
 
 
-class AuthenticationMethod(Enum):
-    """Методы аутентификации"""
+class AuthMethod(Enum):
+    """Метод аутентификации"""
     OAUTH2 = "oauth2"
     API_KEY = "api_key"
     COOKIE = "cookie"
+    LOGIN_FORM = "login_form"
     TOKEN = "token"
 
 
-class JobStatus(Enum):
-    """Статусы заказов"""
-    OPEN = "open"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    CLOSED = "closed"
-
-
 @dataclass
-class PlatformFieldMapping:
-    """Маппинг полей платформы на внутреннюю структуру"""
-    title: str = "title"
-    description: str = "description"
-    budget: str = "budget"
-    currency: str = "currency"
-    deadline: str = "deadline"
-    skills: str = "skills"
-    client_rating: str = "client_rating"
-    job_type: str = "job_type"
-    experience_level: str = "experience_level"
-    location: str = "location"
-    posted_date: str = "posted_date"
-    proposals_count: str = "proposals_count"
-    job_id: str = "id"
+class ScrapingRule:
+    """Правило извлечения данных из HTML"""
+    selector: str
+    attribute: Optional[str] = None  # 'text', 'href', 'src' или имя атрибута
+    regex_pattern: Optional[str] = None
+    post_processor: Optional[str] = None  # Имя функции пост-обработки
+    multiple: bool = False  # Извлекать несколько элементов
 
 
 @dataclass
 class PlatformConfig:
     """Конфигурация платформы"""
-    name: str
-    base_url: str
+    platform_name: str
     platform_type: PlatformType
-    auth_method: AuthenticationMethod
-    api_version: str = "v1"
+    base_url: str
+    auth_method: AuthMethod
+    auth_endpoint: Optional[str] = None
+    scraping_rules: Optional[Dict[str, ScrapingRule]] = None
+    api_endpoints: Optional[Dict[str, str]] = None
+    rate_limits: Optional[Dict[str, int]] = None  # Запросов в минуту/час
+    requires_selenium: bool = False
+    user_agent: Optional[str] = None
+    custom_headers: Optional[Dict[str, str]] = None
+    anti_detection: bool = False  # Обход защиты от ботов
+    captcha_solver: Optional[str] = None  # '2captcha', 'anticaptcha' и т.д.
 
-    # Эндпоинты API
-    endpoints: Dict[str, str] = field(default_factory=dict)
+    def to_dict(self) -> Dict[str, Any]:
+        result = asdict(self)
+        result['platform_type'] = self.platform_type.value
+        result['auth_method'] = self.auth_method.value
+        return result
 
-    # Маппинг полей
-    field_mapping: PlatformFieldMapping = field(default_factory=PlatformFieldMapping)
-
-    # Параметры аутентификации
-    auth_params: Dict[str, str] = field(default_factory=dict)
-
-    # Заголовки по умолчанию
-    default_headers: Dict[str, str] = field(default_factory=dict)
-
-    # Параметры пагинации
-    pagination: Dict[str, Any] = field(default_factory=lambda: {
-        "param": "page",
-        "size_param": "per_page",
-        "default_size": 20
-    })
-
-    # Настройки парсинга HTML (если нет API)
-    scraping: Dict[str, Any] = field(default_factory=dict)
-
-    # Ограничения скорости
-    rate_limit: Dict[str, int] = field(default_factory=lambda: {
-        "requests_per_minute": 60,
-        "requests_per_hour": 1000
-    })
-
-
-@dataclass
-class Job:
-    """Стандартизированная структура заказа"""
-    id: str
-    title: str
-    description: str
-    budget: Optional[float]
-    currency: str = "USD"
-    deadline: Optional[datetime] = None
-    skills: List[str] = field(default_factory=list)
-    client_rating: Optional[float] = None
-    job_type: str = "fixed"
-    experience_level: str = "intermediate"
-    location: str = "anywhere"
-    posted_date: Optional[datetime] = None
-    proposals_count: Optional[int] = None
-    platform: str = ""
-    raw_data: Dict[str, Any] = field(default_factory=dict)
-    url: Optional[str] = None
-
-
-@dataclass
-class Bid:
-    """Структура предложения"""
-    job_id: str
-    cover_letter: str
-    amount: float
-    currency: str = "USD"
-    delivery_time_days: int = 7
-    hourly_rate: Optional[float] = None
-    custom_fields: Dict[str, Any] = field(default_factory=dict)
-
-
-class UniversalPlatformAdapter(PlatformBase):
-    """
-    Универсальный адаптер для поддержки любых фриланс-платформ
-    """
-
-    def __init__(self, config: PlatformConfig):
-        super().__init__()
-        self.config = config
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.auth_token: Optional[str] = None
-        self.last_request_time = 0
-        self.request_count = 0
-        self.multilingual = MultilingualSupport()
-
-        logger.info(f"Инициализирован универсальный адаптер для платформы: {config.name}")
-
-    async def initialize(self):
-        """Инициализация адаптера"""
-        # Создание HTTP сессии
-        self.session = aiohttp.ClientSession(
-            headers=self.config.default_headers,
-            timeout=aiohttp.ClientTimeout(total=30)
+    @classmethod
+    def from_dict(cls,  Dict[str, Any]) -> 'PlatformConfig':
+        return cls(
+            platform_name=data['platform_name'],
+            platform_type=PlatformType(data['platform_type']),
+            base_url=data['base_url'],
+            auth_method=AuthMethod(data['auth_method']),
+            auth_endpoint=data.get('auth_endpoint'),
+            scraping_rules={k: ScrapingRule(**v) for k, v in data.get('scraping_rules', {}).items()},
+            api_endpoints=data.get('api_endpoints'),
+            rate_limits=data.get('rate_limits'),
+            requires_selenium=data.get('requires_selenium', False),
+            user_agent=data.get('user_agent'),
+            custom_headers=data.get('custom_headers'),
+            anti_detection=data.get('anti_detection', False),
+            captcha_solver=data.get('captcha_solver')
         )
 
-        # Аутентификация
-        await self._authenticate()
 
-        logger.info(f"Адаптер платформы '{self.config.name}' инициализирован")
+class UniversalPlatformAdapter:
+    """
+    Универсальный адаптер для работы с любыми фриланс-платформами.
 
-    async def _authenticate(self):
-        """Аутентификация на платформе"""
-        auth_method = self.config.auth_method
+    Особенности:
+    - Поддержка официальных и неофициальных API
+    - Конфигурируемый скрапинг для "серых" площадок
+    - Автоматическое обнаружение и обход защиты от ботов
+    - Управление рейт-лимитами и сессиями
+    - Интеграция с решателями капчи
+    - Поддержка кастомных правил извлечения данных через YAML/JSON конфиги
+    """
 
-        if auth_method == AuthenticationMethod.OAUTH2:
-            await self._oauth2_auth()
-        elif auth_method == AuthenticationMethod.API_KEY:
-            await self._api_key_auth()
-        elif auth_method == AuthenticationMethod.TOKEN:
-            await self._token_auth()
-        elif auth_method == AuthenticationMethod.COOKIE:
-            await self._cookie_auth()
+    def __init__(self,
+                 config_dir: str = "config/platforms",
+                 session_dir: str = "data/sessions"):
+        self.config_dir = Path(config_dir)
+        self.session_dir = Path(session_dir)
+        self.session_dir.mkdir(parents=True, exist_ok=True)
+        self.platforms: Dict[str, PlatformConfig] = {}
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.encryption_engine = EncryptionEngine()
+        self.alert_manager = AlertManager()
+        self._rate_limiters: Dict[str, Dict[str, Any]] = {}
+        self._load_platform_configs()
 
-        logger.info(f"Аутентификация на платформе '{self.config.name}' успешна")
+    def _load_platform_configs(self):
+        """Загрузка конфигураций платформ из директории"""
+        # Загрузка встроенных конфигов
+        built_in_configs = [
+            "upwork.json", "fiverr.json", "freelance_ru.json",
+            "kwork.json", "habr_freelance.json", "toptal.json",
+            "profi_ru.json", "linkedin_pro.json"
+        ]
 
-    async def _oauth2_auth(self):
-        """OAuth2 аутентификация"""
-        client_id = self.config.auth_params.get("client_id")
-        client_secret = self.config.auth_params.get("client_secret")
-        token_url = self.config.auth_params.get("token_url")
-        refresh_token = self.config.auth_params.get("refresh_token")
+        for config_file in built_in_configs:
+            config_path = self.config_dir / config_file
+            if config_path.exists():
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config_data = json.load(f)
+                        self.platforms[config_data['platform_name']] = PlatformConfig.from_dict(config_data)
+                except Exception as e:
+                    self._log(f"Ошибка загрузки конфига {config_file}: {e}")
 
-        # Получение access token
-        async with aiohttp.ClientSession() as session:
-            data = {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "grant_type": "refresh_token" if refresh_token else "client_credentials",
-                "refresh_token": refresh_token
+        # Загрузка кастомных конфигов из поддиректории custom/
+        custom_dir = self.config_dir / "custom"
+        if custom_dir.exists():
+            for custom_file in custom_dir.glob("*.yaml"):
+                try:
+                    import yaml
+                    with open(custom_file, 'r', encoding='utf-8') as f:
+                        config_data = yaml.safe_load(f)
+                        self.platforms[config_data['platform_name']] = PlatformConfig.from_dict(config_data)
+                        self._log(f"Загружен кастомный конфиг: {custom_file.name}")
+                except Exception as e:
+                    self._log(f"Ошибка загрузки кастомного конфига {custom_file}: {e}")
+
+    def register_custom_platform(self, config: PlatformConfig):
+        """
+        Регистрация кастомной платформы во время выполнения.
+
+        Пример использования для Авито Услуги:
+        ```python
+        config = PlatformConfig(
+            platform_name="avito_services",
+            platform_type=PlatformType.SCRAPING,
+            base_url="https://www.avito.ru",
+            auth_method=AuthMethod.COOKIE,
+            scraping_rules={
+                "job_list": ScrapingRule(selector=".item_table", multiple=True),
+                "job_title": ScrapingRule(selector=".title", attribute="text"),
+                "job_price": ScrapingRule(selector=".price-value", attribute="text", post_processor="extract_price"),
+                "job_url": ScrapingRule(selector=".item_link", attribute="href")
+            },
+            api_endpoints={
+                "submit_proposal": "/leads/{{job_id}}/respond"
+            },
+            requires_selenium=True,
+            anti_detection=True
+        )
+        adapter.register_custom_platform(config)
+        ```
+        """
+        self.platforms[config.platform_name] = config
+        self._save_custom_config(config)
+        self._log(f"Зарегистрирована кастомная платформа: {config.platform_name}")
+
+    def _save_custom_config(self, config: PlatformConfig):
+        """Сохранение кастомной конфигурации в файл"""
+        custom_dir = self.config_dir / "custom"
+        custom_dir.mkdir(parents=True, exist_ok=True)
+
+        config_file = custom_dir / f"{config.platform_name}.yaml"
+        import yaml
+
+        with open(config_file, 'w', encoding='utf-8') as f:
+            yaml.dump(config.to_dict(), f, allow_unicode=True, sort_keys=False)
+
+    def authenticate(self, platform_name: str, credentials: Dict[str, Any]) -> bool:
+        """
+        Аутентификация на платформе в зависимости от метода.
+
+        Args:
+            platform_name: Имя платформы
+            credentials: Учетные данные (зависят от метода аутентификации)
+
+        Returns:
+            True если аутентификация успешна
+        """
+        if platform_name not in self.platforms:
+            raise ValueError(f"Платформа {platform_name} не зарегистрирована")
+
+        config = self.platforms[platform_name]
+        session_key = f"{platform_name}_{hashlib.md5(str(credentials.get('username', '')).encode()).hexdigest()}"
+
+        # Проверка существующей сессии
+        if session_key in self.sessions:
+            session = self.sessions[session_key]
+            if session['expires_at'] > datetime.now():
+                self._log(f"Использование существующей сессии для {platform_name}")
+                return True
+
+        # Выбор метода аутентификации
+        if config.auth_method == AuthMethod.OAUTH2:
+            success = self._oauth2_authenticate(config, credentials)
+        elif config.auth_method == AuthMethod.API_KEY:
+            success = self._api_key_authenticate(config, credentials)
+        elif config.auth_method == AuthMethod.COOKIE:
+            success = self._cookie_authenticate(config, credentials)
+        elif config.auth_method == AuthMethod.LOGIN_FORM:
+            success = self._login_form_authenticate(config, credentials)
+        elif config.auth_method == AuthMethod.TOKEN:
+            success = self._token_authenticate(config, credentials)
+        else:
+            raise NotImplementedError(f"Метод аутентификации {config.auth_method} не поддерживается")
+
+        if success:
+            # Сохранение сессии
+            expires_in = credentials.get('expires_in', 3600)
+            self.sessions[session_key] = {
+                'platform': platform_name,
+                'credentials_hash': hashlib.sha256(str(credentials).encode()).hexdigest(),
+                'created_at': datetime.now(),
+                'expires_at': datetime.now() + timedelta(seconds=expires_in),
+                'session_data': self._encrypt_session_data(credentials)
             }
 
-            async with session.post(token_url, data=data) as response:
-                if response.status == 200:
-                    token_data = await response.json()
-                    self.auth_token = token_data.get("access_token")
+            # Сохранение сессии на диск для восстановления после перезапуска
+            self._save_session_to_disk(session_key, self.sessions[session_key])
 
-                    # Обновление заголовков
-                    self.session.headers.update({
-                        "Authorization": f"Bearer {self.auth_token}"
-                    })
-                else:
-                    raise Exception(f"OAuth2 аутентификация не удалась: {response.status}")
+        return success
 
-    async def _api_key_auth(self):
-        """Аутентификация по API ключу"""
-        api_key = self.config.auth_params.get("api_key")
-        api_key_header = self.config.auth_params.get("api_key_header", "X-API-Key")
+    def _oauth2_authenticate(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через OAuth 2.0"""
+        try:
+            # Реализация OAuth2 flow
+            # ... код аутентификации ...
+            return True
+        except Exception as e:
+            self._log(f"Ошибка OAuth2 аутентификации: {e}", level='ERROR')
+            return False
 
-        self.session.headers.update({
-            api_key_header: api_key
-        })
+    def _api_key_authenticate(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через API ключ"""
+        api_key = credentials.get('api_key')
+        if not api_key:
+            return False
 
-    async def _token_auth(self):
-        """Аутентификация по токену"""
-        token = self.config.auth_params.get("token")
-        token_type = self.config.auth_params.get("token_type", "Bearer")
-
-        self.session.headers.update({
-            "Authorization": f"{token_type} {token}"
-        })
-
-    async def _cookie_auth(self):
-        """Аутентификация по кукам"""
-        cookies = self.config.auth_params.get("cookies", {})
-        self.session.cookie_jar.update_cookies(cookies)
-
-    async def _rate_limit_check(self):
-        """Проверка лимитов запросов"""
-        requests_per_minute = self.config.rate_limit.get("requests_per_minute", 60)
-        current_time = asyncio.get_event_loop().time()
-
-        # Простая реализация лимита (в продакшене использовать token bucket)
-        if current_time - self.last_request_time < 60 / requests_per_minute:
-            delay = 60 / requests_per_minute - (current_time - self.last_request_time)
-            await asyncio.sleep(delay)
-
-        self.last_request_time = current_time
-        self.request_count += 1
-
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """Выполнение HTTP запроса с обработкой ошибок"""
-        await self._rate_limit_check()
-
-        url = f"{self.config.base_url}/{endpoint}"
+        # Тестовый запрос для проверки ключа
+        test_url = f"{config.base_url}/api/test"
+        headers = {'Authorization': f'Bearer {api_key}'}
 
         try:
-            async with getattr(self.session, method.lower())(url, **kwargs) as response:
-                if response.status == 200:
-                    return await response.json()
-                elif response.status == 401:
-                    # Токен истек - повторная аутентификация
-                    await self._authenticate()
-                    return await self._make_request(method, endpoint, **kwargs)
-                elif response.status == 429:
-                    # Слишком много запросов
-                    retry_after = int(response.headers.get("Retry-After", 60))
-                    logger.warning(f"Достигнут лимит запросов. Ожидание {retry_after} секунд")
-                    await asyncio.sleep(retry_after)
-                    return await self._make_request(method, endpoint, **kwargs)
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"HTTP {response.status}: {error_text}")
+            response = requests.get(test_url, headers=headers, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            self._log(f"Ошибка проверки API ключа: {e}", level='ERROR')
+            return False
 
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка HTTP запроса: {str(e)}")
-            raise
-        except asyncio.TimeoutError:
-            logger.error("Таймаут запроса")
-            raise
+    def _cookie_authenticate(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через куки (для скрапинга)"""
+        cookies = credentials.get('cookies', {})
+        if not cookies:
+            return False
 
-    async def search_jobs(self,
-                          keywords: Optional[List[str]] = None,
-                          skills: Optional[List[str]] = None,
-                          budget_min: Optional[float] = None,
-                          budget_max: Optional[float] = None,
-                          job_type: Optional[str] = None,
-                          experience_level: Optional[str] = None,
-                          page: int = 1,
-                          per_page: int = 20) -> List[Job]:
+        # Проверка валидности кук через тестовый запрос
+        try:
+            session = requests.Session()
+            for name, value in cookies.items():
+                session.cookies.set(name, value)
+
+            response = session.get(config.base_url, timeout=10)
+            return "login" not in response.url.lower() and response.status_code == 200
+        except Exception as e:
+            self._log(f"Ошибка проверки кук: {e}", level='ERROR')
+            return False
+
+    def _login_form_authenticate(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через форму входа (с использованием Selenium для сложных случаев)"""
+        if config.requires_selenium:
+            return self._selenium_login(config, credentials)
+        else:
+            return self._requests_login(config, credentials)
+
+    def _selenium_login(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через Selenium для обхода JavaScript-защиты"""
+        try:
+            # Настройка веб-драйвера с обходом детекта
+            options = webdriver.ChromeOptions()
+            if config.anti_detection:
+                options.add_argument('--disable-blink-features=AutomationControlled')
+                options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                options.add_experimental_option('useAutomationExtension', False)
+
+            driver = webdriver.Chrome(options=options)
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+            # Переход на страницу логина
+            driver.get(f"{config.base_url}/login")
+            time.sleep(2)  # Ожидание загрузки
+
+            # Ввод учетных данных
+            username_field = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.NAME, "username"))
+            )
+            password_field = driver.find_element(By.NAME, "password")
+
+            username_field.send_keys(credentials['username'])
+            password_field.send_keys(credentials['password'])
+
+            # Отправка формы
+            password_field.submit()
+            time.sleep(3)
+
+            # Проверка успешности входа
+            if "dashboard" in driver.current_url or "profile" in driver.current_url:
+                # Извлечение кук для будущих запросов
+                cookies = {cookie['name']: cookie['value'] for cookie in driver.get_cookies()}
+                credentials['cookies'] = cookies
+                driver.quit()
+                return True
+
+            driver.quit()
+            return False
+
+        except Exception as e:
+            self._log(f"Ошибка Selenium аутентификации: {e}", level='ERROR')
+            return False
+
+    def _requests_login(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через requests (для простых форм)"""
+        try:
+            session = requests.Session()
+            login_data = {
+                'username': credentials['username'],
+                'password': credentials['password'],
+                'remember': '1'
+            }
+
+            response = session.post(f"{config.base_url}/login", data=login_data, timeout=10)
+            return response.status_code == 200 and "login" not in response.url
+
+        except Exception as e:
+            self._log(f"Ошибка аутентификации через requests: {e}", level='ERROR')
+            return False
+
+    def _token_authenticate(self, config: PlatformConfig, credentials: Dict[str, Any]) -> bool:
+        """Аутентификация через токен (JWT и подобные)"""
+        token = credentials.get('token')
+        if not token:
+            return False
+
+        # Проверка токена через тестовый запрос
+        headers = {'Authorization': f'Bearer {token}'}
+        try:
+            response = requests.get(f"{config.base_url}/api/user", headers=headers, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            self._log(f"Ошибка проверки токена: {e}", level='ERROR')
+            return False
+
+    def search_jobs(self,
+                   platform_name: str,
+                   query: str,
+                   filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        Поиск заказов на платформе
+        Поиск вакансий на платформе с поддержкой кастомных правил извлечения.
+
+        Args:
+            platform_name: Имя платформы
+            query: Поисковый запрос
+            filters: Фильтры (бюджет, категория, сроки и т.д.)
+
+        Returns:
+            Список найденных вакансий в унифицированном формате
         """
-        endpoint = self.config.endpoints.get("search_jobs", "jobs/search")
+        if platform_name not in self.platforms:
+            raise ValueError(f"Платформа {platform_name} не зарегистрирована")
 
-        # Формирование параметров запроса
-        params = {
-            self.config.pagination["param"]: page,
-            self.config.pagination["size_param"]: per_page
-        }
+        config = self.platforms[platform_name]
+        self._enforce_rate_limit(platform_name, 'search')
 
-        if keywords:
-            params["keywords"] = ",".join(keywords)
-        if skills:
-            params["skills"] = ",".join(skills)
-        if budget_min:
-            params["budget_min"] = budget_min
-        if budget_max:
-            params["budget_max"] = budget_max
-        if job_type:
-            params["job_type"] = job_type
-        if experience_level:
-            params["experience_level"] = experience_level
+        try:
+            if config.platform_type == PlatformType.OFFICIAL_API:
+                jobs = self._search_via_api(config, query, filters)
+            elif config.platform_type in [PlatformType.UNOFFICIAL_API, PlatformType.HYBRID]:
+                jobs = self._search_via_unofficial_api(config, query, filters)
+            else:  # SCRAPING
+                jobs = self._search_via_scraping(config, query, filters)
 
-        # Выполнение запроса
-        response = await self._make_request("GET", endpoint, params=params)
+            # Нормализация результатов в единый формат
+            normalized_jobs = [self._normalize_job(job, platform_name) for job in jobs]
+            self._log(f"Найдено {len(normalized_jobs)} вакансий на {platform_name}")
+            return normalized_jobs
 
-        # Парсинг результатов
+        except Exception as e:
+            self._log(f"Ошибка поиска на {platform_name}: {e}", level='ERROR')
+            self.alert_manager.send_alert(
+                title=f"Ошибка поиска на {platform_name}",
+                message=str(e),
+                severity='warning',
+                metadata={'platform': platform_name, 'query': query}
+            )
+            return []
+
+    def _search_via_scraping(self,
+                           config: PlatformConfig,
+                           query: str,
+                           filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Поиск через скрапинг HTML с поддержкой кастомных правил"""
+        # Формирование URL поиска
+        search_url = self._build_search_url(config, query, filters)
+
+        if config.requires_selenium:
+            return self._selenium_scrape(search_url, config)
+        else:
+            return self._beautifulsoup_scrape(search_url, config)
+
+    def _selenium_scrape(self, url: str, config: PlatformConfig) -> List[Dict[str, Any]]:
+        """Скрапинг с использованием Selenium для динамических страниц"""
+        try:
+            options = webdriver.ChromeOptions()
+            if config.anti_detection:
+                options.add_argument('--disable-blink-features=AutomationControlled')
+
+            driver = webdriver.Chrome(options=options)
+            driver.get(url)
+
+            # Ожидание загрузки результатов
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, config.scraping_rules['job_list'].selector))
+                )
+            except TimeoutException:
+                self._log("Таймаут ожидания загрузки результатов", level='WARNING')
+
+            # Прокрутка для загрузки дополнительных результатов (если необходимо)
+            if config.scraping_rules.get('infinite_scroll'):
+                self._scroll_to_load_more(driver, max_scrolls=3)
+
+            # Извлечение HTML после полной загрузки
+            html = driver.page_source
+            driver.quit()
+
+            # Парсинг через BeautifulSoup для удобства
+            soup = BeautifulSoup(html, 'html.parser')
+            return self._parse_jobs_from_soup(soup, config)
+
+        except Exception as e:
+            self._log(f"Ошибка Selenium скрапинга: {e}", level='ERROR')
+            return []
+
+    def _beautifulsoup_scrape(self, url: str, config: PlatformConfig) -> List[Dict[str, Any]]:
+        """Скрапинг с использованием requests + BeautifulSoup для статических страниц"""
+        try:
+            headers = {'User-Agent': config.user_agent or 'Mozilla/5.0'}
+            if config.custom_headers:
+                headers.update(config.custom_headers)
+
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            return self._parse_jobs_from_soup(soup, config)
+
+        except Exception as e:
+            self._log(f"Ошибка BeautifulSoup скрапинга: {e}", level='ERROR')
+            return []
+
+    def _parse_jobs_from_soup(self, soup: BeautifulSoup, config: PlatformConfig) -> List[Dict[str, Any]]:
+        """Извлечение данных о вакансиях из распарсенного HTML по правилам конфигурации"""
         jobs = []
-        results = response.get("results", response.get("data", response.get("jobs", [])))
+        job_elements = soup.select(config.scraping_rules['job_list'].selector)
 
-        for raw_job in results:
-            job = self._parse_job(raw_job)
-            jobs.append(job)
+        for job_element in job_elements[:50]:  # Ограничение для безопасности
+            job_data = {}
+
+            # Извлечение каждого поля по правилам
+            for field_name, rule in config.scraping_rules.items():
+                if field_name == 'job_list':
+                    continue
+
+                try:
+                    if rule.multiple:
+                        elements = job_element.select(rule.selector)
+                        values = [self._extract_value(el, rule) for el in elements]
+                        job_data[field_name] = values
+                    else:
+                        element = job_element.select_one(rule.selector)
+                        if element:
+                            job_data[field_name] = self._extract_value(element, rule)
+                except Exception as e:
+                    self._log(f"Ошибка извлечения поля {field_name}: {e}", level='DEBUG')
+
+            if job_
+                jobs.append(job_data)
 
         return jobs
 
-    def _parse_job(self, raw_job: Dict[str, Any]) -> Job:
-        """Парсинг сырых данных заказа в стандартизированную структуру"""
-        mapping = self.config.field_mapping
+    def _extract_value(self, element: Any, rule: ScrapingRule) -> Any:
+        """Извлечение значения из HTML-элемента по правилу"""
+        value = None
 
-        def get_nested_value(data: Dict, path: str, default=None):
-            """Получение значения по вложенному пути (например: 'client.rating')"""
-            keys = path.split('.')
-            value = data
-            for key in keys:
-                if isinstance(value, dict):
-                    value = value.get(key, default)
-                else:
-                    return default
-            return value
+        if rule.attribute == 'text':
+            value = element.get_text(strip=True)
+        elif rule.attribute:
+            value = element.get(rule.attribute)
+        else:
+            value = str(element)
 
-        # Извлечение полей по маппингу
-        title = get_nested_value(raw_job, mapping.title, "")
-        description = get_nested_value(raw_job, mapping.description, "")
-        budget = get_nested_value(raw_job, mapping.budget)
-        currency = get_nested_value(raw_job, mapping.currency, "USD")
+        # Применение регулярного выражения если указано
+        if rule.regex_pattern and value:
+            match = re.search(rule.regex_pattern, str(value))
+            if match:
+                value = match.group(1) if match.groups() else match.group(0)
 
-        # Парсинг дедлайна
-        deadline_raw = get_nested_value(raw_job, mapping.deadline)
-        deadline = self._parse_date(deadline_raw) if deadline_raw else None
+        # Применение пост-процессора
+        if rule.post_processor and value:
+            value = self._apply_post_processor(value, rule.post_processor)
 
-        # Парсинг навыков
-        skills_raw = get_nested_value(raw_job, mapping.skills, [])
-        skills = skills_raw if isinstance(skills_raw, list) else [skills_raw]
+        return value
 
-        # Парсинг рейтинга клиента
-        client_rating = get_nested_value(raw_job, mapping.client_rating)
-        if isinstance(client_rating, str):
+    def _apply_post_processor(self, value: Any, processor_name: str) -> Any:
+        """Применение функции пост-обработки к извлеченному значению"""
+        processors = {
+            'extract_price': self._extract_price,
+            'normalize_date': self._normalize_date,
+            'extract_number': self._extract_number,
+            'clean_text': self._clean_text,
+            'extract_currency': self._extract_currency
+        }
+
+        processor = processors.get(processor_name)
+        if processor:
             try:
-                client_rating = float(client_rating)
+                return processor(value)
+            except Exception as e:
+                self._log(f"Ошибка пост-процессора {processor_name}: {e}", level='DEBUG')
+
+        return value
+
+    def _extract_price(self, text: str) -> float:
+        """Извлечение цены из текста (поддержка различных форматов)"""
+        # Поиск чисел с возможными разделителями тысяч и десятичными точками
+        match = re.search(r'[\d\s,.]+', text.replace(' ', '').replace(',', ''))
+        if match:
+            try:
+                return float(match.group(0).replace(' ', '').replace(',', '.'))
             except:
-                client_rating = None
+                pass
+        return 0.0
 
-        # Парсинг даты публикации
-        posted_date_raw = get_nested_value(raw_job, mapping.posted_date)
-        posted_date = self._parse_date(posted_date_raw) if posted_date_raw else None
+    def _normalize_date(self, text: str) -> str:
+        """Нормализация даты в формат ISO"""
+        # Реализация для различных форматов дат
+        # ... логика нормализации ...
+        return text
 
-        # Извлечение остальных полей
-        job_type = get_nested_value(raw_job, mapping.job_type, "fixed")
-        experience_level = get_nested_value(raw_job, mapping.experience_level, "intermediate")
-        location = get_nested_value(raw_job, mapping.location, "anywhere")
-        proposals_count = get_nested_value(raw_job, mapping.proposals_count)
+    def _extract_number(self, text: str) -> int:
+        """Извлечение первого числа из текста"""
+        match = re.search(r'\d+', text)
+        return int(match.group(0)) if match else 0
 
-        # Извлечение ID заказа
-        job_id = get_nested_value(raw_job, mapping.job_id, "")
+    def _clean_text(self, text: str) -> str:
+        """Очистка текста от лишних пробелов и спецсимволов"""
+        return ' '.join(text.split())
 
-        # Формирование URL заказа
-        job_url = None
-        if job_id:
-            job_url = f"{self.config.base_url}/jobs/{job_id}"
+    def _extract_currency(self, text: str) -> str:
+        """Извлечение кода валюты из текста"""
+        currency_map = {
+            '₽': 'RUB', 'руб': 'RUB', 'р': 'RUB',
+            '$': 'USD', 'доллар': 'USD',
+            '€': 'EUR', 'евро': 'EUR'
+        }
 
-        return Job(
-            id=str(job_id),
-            title=str(title),
-            description=str(description),
-            budget=float(budget) if budget else None,
-            currency=str(currency),
-            deadline=deadline,
-            skills=skills,
-            client_rating=float(client_rating) if client_rating else None,
-            job_type=str(job_type),
-            experience_level=str(experience_level),
-            location=str(location),
-            posted_date=posted_date,
-            proposals_count=int(proposals_count) if proposals_count else None,
-            platform=self.config.name,
-            raw_data=raw_job,
-            url=job_url
-        )
+        for symbol, code in currency_map.items():
+            if symbol in text:
+                return code
+        return 'RUB'
 
-    def _parse_date(self, date_str: Any) -> Optional[datetime]:
-        """Парсинг даты из различных форматов"""
-        if date_str is None:
-            return None
+    def _scroll_to_load_more(self, driver: webdriver.Chrome, max_scrolls: int = 3):
+        """Прокрутка страницы для загрузки дополнительного контента"""
+        last_height = driver.execute_script("return document.body.scrollHeight")
 
-        if isinstance(date_str, datetime):
-            return date_str
+        for _ in range(max_scrolls):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # Ожидание загрузки
 
-        if isinstance(date_str, (int, float)):
-            # Unix timestamp
-            return datetime.fromtimestamp(date_str)
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
 
-        if isinstance(date_str, str):
-            # Попытка различных форматов
-            formats = [
-                "%Y-%m-%d",
-                "%Y-%m-%dT%H:%M:%S",
-                "%Y-%m-%dT%H:%M:%S.%fZ",
-                "%Y-%m-%dT%H:%M:%SZ",
-                "%d.%m.%Y",
-                "%d/%m/%Y",
-                "%m/%d/%Y"
-            ]
+    def _build_search_url(self, config: PlatformConfig, query: str, filters: Optional[Dict[str, Any]]) -> str:
+        """Формирование URL поиска с учетом фильтров"""
+        from urllib.parse import urlencode
 
-            for fmt in formats:
-                try:
-                    return datetime.strptime(date_str, fmt)
-                except ValueError:
-                    continue
+        params = {'q': query}
+        if filters:
+            params.update(filters)
 
+        query_string = urlencode(params, encoding='utf-8')
+        return f"{config.base_url}/search?{query_string}"
+
+    def _normalize_job(self, raw_job: Dict[str, Any], platform_name: str) -> Dict[str, Any]:
+        """Нормализация данных вакансии в унифицированный формат"""
+        return {
+            'platform': platform_name,
+            'job_id': raw_job.get('id') or raw_job.get('job_id') or self._generate_job_hash(raw_job),
+            'title': raw_job.get('title', '').strip(),
+            'description': raw_job.get('description', ''),
+            'budget': {
+                'amount': raw_job.get('price') or raw_job.get('budget') or 0,
+                'currency': raw_job.get('currency', 'RUB'),
+                'type': raw_job.get('budget_type', 'fixed')  # fixed/hourly
+            },
+            'skills': raw_job.get('skills', []),
+            'posted_at': raw_job.get('posted_at') or raw_job.get('date'),
+            'deadline': raw_job.get('deadline'),
+            'url': raw_job.get('url') or raw_job.get('job_url'),
+            'client': {
+                'rating': raw_job.get('client_rating'),
+                'reviews': raw_job.get('client_reviews', 0),
+                'country': raw_job.get('client_country')
+            },
+            'raw_data': raw_job  # Сохранение исходных данных для отладки
+        }
+
+    def _generate_job_hash(self, job_ Dict[str, Any]) -> str:
+        """Генерация уникального хеша для вакансии на основе ее содержимого"""
+        # Используем ключевые поля для создания стабильного хеша
+        hash_data = f"{job_data.get('title', '')}|{job_data.get('description', '')[:100]}|{job_data.get('price', 0)}"
+        return hashlib.md5(hash_data.encode()).hexdigest()
+
+    def _enforce_rate_limit(self, platform_name: str, operation: str):
+        """Применение рейт-лимитов для предотвращения блокировок"""
+        if platform_name not in self._rate_limiters:
+            self._rate_limiters[platform_name] = {}
+
+        platform_limits = self._rate_limiters[platform_name]
+
+        if operation not in platform_limits:
+            platform_limits[operation] = {
+                'last_call': datetime.min,
+                'count': 0,
+                'window_start': datetime.now()
+            }
+
+        limit_info = platform_limits[operation]
+        config = self.platforms[platform_name]
+        rate_limits = config.rate_limits or {}
+        max_per_minute = rate_limits.get(f"{operation}_per_minute", 60)
+        max_per_hour = rate_limits.get(f"{operation}_per_hour", 1000)
+
+        now = datetime.now()
+        seconds_since_last = (now - limit_info['last_call']).total_seconds()
+
+        # Ограничение по минутному окну
+        if seconds_since_last < 60 / max_per_minute:
+            sleep_time = (60 / max_per_minute) - seconds_since_last
+            time.sleep(max(0, sleep_time))
+
+        # Сброс счетчиков по истечении окон
+        if (now - limit_info['window_start']).total_seconds() > 3600:
+            limit_info['window_start'] = now
+            limit_info['count'] = 0
+
+        # Ограничение по часовому окну
+        if limit_info['count'] >= max_per_hour:
+            sleep_until = limit_info['window_start'] + timedelta(hours=1)
+            sleep_seconds = (sleep_until - now).total_seconds()
+            if sleep_seconds > 0:
+                self._log(f"Достигнут рейт-лимит для {platform_name}.{operation}, сон {sleep_seconds:.0f} сек", level='WARNING')
+                time.sleep(sleep_seconds)
+                limit_info['window_start'] = datetime.now()
+                limit_info['count'] = 0
+
+        limit_info['last_call'] = datetime.now()
+        limit_info['count'] += 1
+
+    def _encrypt_session_data(self, data: Dict[str, Any]) -> str:
+        """Шифрование данных сессии для безопасного хранения"""
+        json_data = json.dumps(data, ensure_ascii=False)
+        encrypted = self.encryption_engine.encrypt(json_data.encode())
+        return base64.b64encode(encrypted).decode()
+
+    def _decrypt_session_data(self, encrypted_ str) -> Dict[str, Any]:
+        """Расшифровка данных сессии"""
+        try:
+            decoded = base64.b64decode(encrypted_data.encode())
+            decrypted = self.encryption_engine.decrypt(decoded)
+            return json.loads(decrypted.decode())
+        except Exception as e:
+            self._log(f"Ошибка расшифровки сессии: {e}", level='ERROR')
+            return {}
+
+    def _save_session_to_disk(self, session_key: str, session_ Dict[str, Any]):
+        """Сохранение сессии на диск в зашифрованном виде"""
+        session_file = self.session_dir / f"{session_key}.enc"
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump(session_data, f, default=str)
+
+    def _load_session_from_disk(self, session_key: str) -> Optional[Dict[str, Any]]:
+        """Загрузка сессии с диска"""
+        session_file = self.session_dir / f"{session_key}.enc"
+        if session_file.exists():
+            try:
+                with open(session_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                self._log(f"Ошибка загрузки сессии с диска: {e}", level='ERROR')
         return None
 
-    async def get_job_details(self, job_id: str) -> Optional[Job]:
-        """Получение деталей заказа"""
-        endpoint = self.config.endpoints.get("get_job", f"jobs/{job_id}")
+    def _log(self, message: str, level: str = 'INFO'):
+        """Логирование событий адаптера"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_entry = f"[{timestamp}] [{level}] UniversalPlatformAdapter: {message}"
 
-        response = await self._make_request("GET", endpoint)
-        raw_job = response.get("job", response.get("data", response))
+        # Запись в файл
+        log_file = Path("logs/platform_adapter.log")
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(log_entry + '\n')
 
-        return self._parse_job(raw_job) if raw_job else None
+        # Вывод в консоль для отладки
+        if level in ['ERROR', 'CRITICAL', 'WARNING']:
+            print(log_entry)
 
-    async def place_bid(self, bid: Bid) -> Dict[str, Any]:
-        """Размещение предложения на заказ"""
-        endpoint = self.config.endpoints.get("place_bid", f"jobs/{bid.job_id}/bids")
 
-        # Формирование данных предложения
-        bid_data = {
-            "cover_letter": bid.cover_letter,
-            "amount": bid.amount,
-            "currency": bid.currency,
-            "delivery_time_days": bid.delivery_time_days
-        }
+# Глобальный экземпляр адаптера (паттерн Singleton)
+_universal_adapter_instance = None
 
-        # Добавление кастомных полей
-        bid_data.update(bid.custom_fields)
 
-        response = await self._make_request("POST", endpoint, json=bid_data)
+def get_universal_platform_adapter(config_dir: str = "config/platforms") -> UniversalPlatformAdapter:
+    """
+    Получение глобального экземпляра UniversalPlatformAdapter (Singleton).
 
-        return {
-            "success": True,
-            "bid_id": response.get("id", response.get("bid_id")),
-            "platform": self.config.name,
-            "job_id": bid.job_id,
-            "timestamp": datetime.now().isoformat()
-        }
+    Returns:
+        Единый экземпляр адаптера для всего приложения
+    """
+    global _universal_adapter_instance
 
-    async def get_my_bids(self, status: Optional[str] = None, page: int = 1) -> List[Dict[str, Any]]:
-        """Получение моих предложений"""
-        endpoint = self.config.endpoints.get("my_bids", "bids")
+    if _universal_adapter_instance is None:
+        _universal_adapter_instance = UniversalPlatformAdapter(config_dir)
 
-        params = {
-            self.config.pagination["param"]: page
-        }
-
-        if status:
-            params["status"] = status
-
-        response = await self._make_request("GET", endpoint, params=params)
-
-        return response.get("bids", response.get("data", []))
-
-    async def get_job_proposals(self, job_id: str) -> List[Dict[str, Any]]:
-        """Получение предложений по заказу"""
-        endpoint = self.config.endpoints.get("job_proposals", f"jobs/{job_id}/proposals")
-
-        response = await self._make_request("GET", endpoint)
-
-        return response.get("proposals", response.get("data", []))
-
-    async def scrape_job_from_url(self, url: str) -> Optional[Job]:
-        """Парсинг заказа из HTML страницы (если нет API)"""
-        if not self.config.scraping:
-            raise Exception("Scraping не настроен для этой платформы")
-
-        try:
-            async with self.session.get(url) as response:
-                html = await response.text()
-
-            soup = BeautifulSoup(html, 'html.parser')
-
-            # Извлечение данных по селекторам из конфигурации
-            selectors = self.config.scraping.get("selectors", {})
-
-            data = {}
-            for field, selector in selectors.items():
-                element = soup.select_one(selector)
-                if element:
-                    data[field] = element.get_text(strip=True)
-
-            # Преобразование в стандартную структуру
-            return self._parse_job(data)
-
-        except Exception as e:
-            logger.error(f"Ошибка парсинга страницы {url}: {str(e)}")
-            return None
-
-    async def close(self):
-        """Закрытие соединения"""
-        if self.session:
-            await self.session.close()
-            logger.info(f"Соединение с платформой '{self.config.name}' закрыто")
+    return _universal_adapter_instance

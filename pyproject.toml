@@ -4,166 +4,164 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-freelance-automation"
-version = "1.0.0"
-description = "Fully autonomous AI freelancer that replaces humans on freelance platforms: finds jobs, communicates, delivers, gets paid."
+version = "1.2.0"
+description = "AI-Powered Freelance Automation Platform with Blockchain Integration"
 readme = "README.md"
-authors = [{ name = "Autonomous Systems Lab", email = "dev@ai-freelance-automation.dev" }]
-maintainers = [{ name = "Core Team", email = "support@ai-freelance-automation.dev" }]
-license = { text = "Proprietary" }
+requires-python = ">=3.10,<3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "A-T-0-M-1-K", email = "atomik.dev@example.com"}
+]
+maintainers = [
+    {name = "AI Freelance Automation Team", email = "support@ai-freelance-automation.io"}
+]
+keywords = [
+    "freelance", "automation", "ai", "blockchain", "nft", "smart-contracts",
+    "machine-learning", "natural-language-processing"
+]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "License :: Other/Proprietary License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Topic :: Internet",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Office/Business",
-    "Topic :: Security :: Cryptography",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules"
 ]
-keywords = [
-    "ai", "freelance", "automation", "llm", "transcription", "translation", "copywriting",
-    "autonomous-agent", "self-healing", "payment", "blockchain", "gdpr", "pci-dss"
-]
-requires-python = ">=3.10,<3.13"
+
+# Зависимости времени выполнения (минимальный набор)
 dependencies = [
-    # Core
-    "pydantic>=2.5.0,<3.0.0",
-    "structlog>=23.2.0",
-    "python-dotenv>=1.0.0",
-    "cryptography>=41.0.0",
-    "argon2-cffi>=23.1.0",
-    "aiofiles>=23.2.0",
-
-    # AI & ML
-    "openai>=1.10.0",
-    "anthropic>=0.20.0",
-    "transformers>=4.35.0",
-    "torch>=2.1.0; platform_machine != 'arm64' or platform_system != 'Darwin'",
-    "torchaudio>=2.1.0; platform_machine != 'arm64' or platform_system != 'Darwin'",
-    "faster-whisper>=1.0.0",
-    "sentence-transformers>=2.3.0",
-    "langchain>=0.1.0",
-    "llama-cpp-python>=0.2.50; sys_platform != 'win32'",
-
-    # Web & APIs
-    "httpx>=0.25.0",
-    "aiohttp>=3.9.0",
-    "playwright>=1.40.0",
-    "beautifulsoup4>=4.12.0",
-    "lxml>=4.9.0",
-
-    # Payments
-    "stripe>=6.0.0",
-    "paypal-checkout-serversdk>=1.0.0",
-    "yoomoney>=0.3.0",
-    "web3>=6.10.0",
-
-    # Data & Storage
-    "redis>=5.0.0",
-    "psycopg2-binary>=2.9.0",
-    "motor>=3.3.0",  # async MongoDB
-    "boto3>=1.34.0",
-    "google-cloud-storage>=2.14.0",
-
-    # Monitoring & Observability
-    "prometheus-client>=0.19.0",
-    "opentelemetry-api>=1.22.0",
-    "opentelemetry-sdk>=1.22.0",
-    "datadog>=0.45.0",
-
-    # Utilities
-    "tenacity>=8.2.0",
-    "schedule>=1.2.0",
-    "diskcache>=5.6.0",
-    "pyyaml>=6.0.0",
-    "jsonschema>=4.20.0",
-    "tqdm>=4.66.0",
-
-    # Security
-    "tink>=1.8.0",  # Google Tink for crypto
-    "secure-smtplib>=1.0.0",
+    "fastapi>=0.100.0,<0.110.0",
+    "uvicorn[standard]>=0.23.0,<0.25.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "sqlalchemy>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "redis>=4.5.0,<5.0.0",
+    "cryptography>=41.0.0,<42.0.0",
+    "python-jose[cryptography]>=3.3.0,<4.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "web3>=6.0.0,<7.0.0",
+    "structlog>=23.1.0,<24.0.0"
 ]
 
+# Опциональные зависимости (экстра)
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "black>=23.10.0",
-    "ruff>=0.1.6",
-    "mypy>=1.7.0",
-    "types-requests",
-    "types-pyyaml",
-    "pre-commit>=3.5.0",
-]
-ui = [
-    "streamlit>=1.28.0",
-    "gradio>=4.10.0",
-]
 gpu = [
-    "torch>=2.1.0+cu121; sys_platform == 'linux'",
-    "torchaudio>=2.1.0+cu121; sys_platform == 'linux'",
+    "torch>=2.0.0,<2.2.0",
+    "transformers>=4.30.0,<5.0.0",
+    "accelerate>=0.21.0,<0.23.0",
+    "bitsandbytes>=0.41.0,<0.42.0",
+    "sentence-transformers>=2.2.0,<3.0.0"
 ]
-all = [
-    "ai-freelance-automation[dev,ui,gpu]",
+dev = [
+    "ruff>=0.1.0,<0.2.0",
+    "black>=23.7.0,<24.0.0",
+    "isort>=5.12.0,<6.0.0",
+    "mypy>=1.5.0,<2.0.0",
+    "ipython>=8.14.0,<9.0.0",
+    "debugpy>=1.6.0,<2.0.0"
 ]
+test = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<0.22.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-mock>=3.11.0,<4.0.0",
+    "factory-boy>=3.2.0,<4.0.0",
+    "faker>=19.0.0,<20.0.0"
+]
+prod = [
+    "gunicorn>=21.2.0,<22.0.0",
+    "uvloop>=0.17.0,<0.18.0",
+    "prometheus-client>=0.17.0,<0.18.0",
+    "sentry-sdk[fastapi]>=1.30.0,<2.0.0",
+    "celery[redis]>=5.3.0,<6.0.0"
+]
+
+[project.scripts]
+ai-freelance = "main:main"
+freelance-cli = "cli:main"
 
 [project.urls]
-Homepage = "https://ai-freelance-automation.dev"
-Documentation = "https://docs.ai-freelance-automation.dev"
-Repository = "https://github.com/ai-freelance-automation/core"
-Changelog = "https://github.com/ai-freelance-automation/core/releases"
+Homepage = "https://github.com/A-T-0-M-1-K/ai-freelance-automation"
+Documentation = "https://github.com/A-T-0-M-1-K/ai-freelance-automation/tree/main/docs"
+Repository = "https://github.com/A-T-0-M-1-K/ai-freelance-automation"
+Issues = "https://github.com/A-T-0-M-1-K/ai-freelance-automation/issues"
+Changelog = "https://github.com/A-T-0-M-1-K/ai-freelance-automation/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+platforms = ["any"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "services*", "plugins*", "utils*", "tests*"]
-namespaces = false
+include = ["ai*", "core*", "platforms*", "blockchain*", "services*", "plugins*", "ui*", "scripts*"]
+exclude = ["tests*", "docs*", "docker*", "tools*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml", "*.json", "*.txt", "*.pem", "*.env.example"]
+"*" = ["*.json", "*.yaml", "*.yml", "*.txt", "*.md", "*.template", "*.sql", "*.cfg", "*.ini"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__", "*.py[co]", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".git*"]
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md", content-type = "text/markdown"}
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-select = ["I", "UP", "RUF"]
+extend-ignore = ["E501", "D203", "D212"]
+
+[tool.ruff.isort]
+known-first-party = ["ai_freelance_automation", "core", "platforms", "blockchain", "services"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310', 'py311', 'py312']
-skip-string-normalization = false
-
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-select = ["E", "W", "F", "I", "B", "C4", "SIM", "UP", "TID", "PT", "RUF"]
-ignore = ["E501"]  # handled by black
-fixable = ["ALL"]
-unfixable = []
+target-version = ["py310", "py311"]
 
 [tool.mypy]
-python_version = "3.11"
-strict = true
+python_version = "3.10"
+warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-show_error_codes = true
-pretty = true
+ignore_missing_imports = true
+strict = true
 
 [tool.pytest.ini_options]
-minversion = "7.0"
 testpaths = ["tests"]
-addopts = "-v --tb=short --strict-markers --cov=core --cov=services --cov-report=term-missing"
-asyncio_mode = "auto"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--cov=core",
+    "--cov=services",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov"
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "slow: Slow tests (skip with -m 'not slow')",
+    "gpu: GPU-requiring tests"
+]
 
 [tool.coverage.run]
-source = ["core", "services", "utils"]
-omit = ["tests/*", "*/__main__.py"]
+branch = true
+source = ["core", "services", "platforms", "blockchain", "ai"]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
+    "def __repr__",
     "if __name__ == .__main__.:",
     "raise AssertionError",
     "raise NotImplementedError",
+    "if TYPE_CHECKING:"
 ]

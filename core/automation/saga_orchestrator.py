@@ -1,861 +1,681 @@
-# Файл: core/automation/saga_orchestrator.py
 """
-Оркестратор жизненного цикла задач по паттерну Сага
-Обеспечивает:
-- Атомарность операций через компенсирующие транзакции
-- Автоматический откат при ошибках
-- Сохранение состояния для восстановления после сбоев
-- Параллельную обработку нескольких задач
-- Интеграцию с блокчейном для неизменяемой истории
+Реализация паттерна Saga для управления долгоживущими транзакциями
+с поддержкой откатов, журналирования и восстановления после сбоев.
 """
-import asyncio
+
 import json
-import logging
+import os
+import time
+import hashlib
+from pathlib import Path
+from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, Optional, List, Callable, Tuple
-from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional, Callable, Tuple
 from dataclasses import dataclass, asdict
-from uuid import uuid4
+import threading
+import uuid
 
-from core.services.base_service import BaseService, ExecutionContext, ServiceResult
+from core.monitoring.alert_manager import AlertManager
+from core.security.audit_logger import AuditLogger
 from core.payment.enhanced_payment_processor import EnhancedPaymentProcessor
-from core.communication.empathetic_communicator import EmpatheticCommunicator
-from services.ai_services.copywriting_service import CopywritingService
-from services.ai_services.translation_service import TranslationService
-from services.storage.database_service import DatabaseService
-from blockchain.smart_contract_manager import SmartContractManager
-
-logger = logging.getLogger(__name__)
 
 
-class TaskPhase(Enum):
-    """Фазы жизненного цикла задачи"""
-    DISCOVERY = "discovery"  # Поиск и анализ заказа
-    QUALIFICATION = "qualification"  # Оценка возможности выполнения
-    BIDDING = "bidding"  # Подача предложения
-    NEGOTIATION = "negotiation"  # Переговоры с клиентом
-    CONTRACT_SIGNING = "contract_signing"  # Подписание контракта (блокчейн)
-    PAYMENT_ESCROW = "payment_escrow"  # Депозит платежа в эскроу
-    EXECUTION = "execution"  # Выполнение работы
-    QUALITY_CHECK = "quality_check"  # Внутренняя проверка качества
-    CLIENT_REVIEW = "client_review"  # Проверка клиентом
-    REVISION = "revision"  # Работа над правками
-    DELIVERY = "delivery"  # Финальная доставка
-    PAYMENT_RELEASE = "payment_release"  # Выпуск платежа из эскроу
-    FEEDBACK = "feedback"  # Получение отзыва
-    NFT_MINTING = "nft_minting"  # Создание репутационного NFT
-    COMPLETED = "completed"  # Успешное завершение
-    FAILED = "failed"  # Неудачное завершение
-    CANCELLED = "cancelled"  # Отмена задачи
+class SagaStatus(Enum):
+    """Статус выполнения саги"""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    COMPENSATING = "compensating"
+    COMPENSATED = "compensated"
+    TIMED_OUT = "timed_out"
+
+
+class SagaStepStatus(Enum):
+    """Статус шага саги"""
+    PENDING = "pending"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    COMPENSATED = "compensated"
 
 
 @dataclass
 class SagaStep:
-    """Шаг саги с компенсирующей операцией"""
-    phase: TaskPhase
-    execute_fn: Callable  # Функция выполнения
-    compensate_fn: Callable  # Функция отката
-    description: str
-    timeout: int = 300  # Таймаут в секундах
-    retry_policy: Dict[str, Any] = None
+    """Один шаг в цепочке саги"""
+    step_id: str
+    name: str
+    action: Callable  # Основное действие
+    compensation: Callable  # Действие отката
+    timeout_seconds: int = 300  # Таймаут по умолчанию 5 минут
+    retry_count: int = 3
+    retry_delay_seconds: int = 5
+    requires_confirmation: bool = False
+    metadata: Dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
 
 
 @dataclass
-class TaskState:
-    """Полное состояние задачи для восстановления после сбоя"""
-    task_id: str
-    job_id: str
-    current_phase: TaskPhase
-    phase_start_time: datetime
-    phase_attempts: int
-    phase_data: Dict[str, Any]
-    saga_steps_completed: List[TaskPhase]
-    error_history: List[Dict[str, Any]]
-    compensation_log: List[Dict[str, Any]]
-    created_at: datetime
-    updated_at: datetime
-    blockchain_tx_hash: Optional[str] = None
-    escrow_contract_address: Optional[str] = None
+class SagaExecutionLog:
+    """Журнал выполнения саги для аудита и восстановления"""
+    saga_id: str
+    saga_name: str
+    status: SagaStatus
+    steps: List[Dict[str, Any]]
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    error_step: Optional[str] = None
+    context_snapshot: Dict[str, Any] = None
+    hash_before: str = ""
+    hash_after: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
-        data = asdict(self)
-        # Конвертация datetime в ISO формат
-        for key, value in data.items():
-            if isinstance(value, datetime):
-                data[key] = value.isoformat()
-            elif isinstance(value, TaskPhase):
-                data[key] = value.value
-        return data
+        result = asdict(self)
+        result['started_at'] = self.started_at.isoformat()
+        result['completed_at'] = self.completed_at.isoformat() if self.completed_at else None
+        return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TaskState':
-        # Обратная конвертация из ISO формата
-        for key in ['phase_start_time', 'created_at', 'updated_at']:
-            if key in data and isinstance(data[key], str):
-                data[key] = datetime.fromisoformat(data[key].replace('Z', '+00:00'))
+    def from_dict(cls,  Dict[str, Any]) -> 'SagaExecutionLog':
+        return cls(
+            saga_id=data['saga_id'],
+            saga_name=data['saga_name'],
+            status=SagaStatus(data['status']),
+            steps=data['steps'],
+            started_at=datetime.fromisoformat(data['started_at']),
+            completed_at=datetime.fromisoformat(data['completed_at']) if data.get('completed_at') else None,
+            error_message=data.get('error_message'),
+            error_step=data.get('error_step'),
+            context_snapshot=data.get('context_snapshot', {}),
+            hash_before=data.get('hash_before', ''),
+            hash_after=data.get('hash_after', '')
+        )
 
-        if 'current_phase' in data:
-            data['current_phase'] = TaskPhase(data['current_phase'])
 
-        if 'saga_steps_completed' in data:
-            data['saga_steps_completed'] = [TaskPhase(p) for p in data['saga_steps_completed']]
-
-        return cls(**data)
-
-
-class SagaOrchestrator(BaseService):
+class SagaOrchestrator:
     """
-    Оркестратор жизненного цикла задач с поддержкой:
-    - Распределенных транзакций через паттерн Сага
-    - Автоматического отката при ошибках
-    - Восстановления после сбоев
-    - Интеграции с блокчейном для неизменяемой истории
-    - Параллельной обработки задач
+    Оркестратор саг для управления сложными бизнес-транзакциями
+    с гарантией согласованности через механизм откатов (compensation).
+
+    Особенности:
+    - Журналирование всех этапов с хеш-суммами для аудита
+    - Автоматический откат при таймауте (>5 мин по умолчанию)
+    - Поддержка восстановления после сбоя из журнала
+    - Человеко-читаемые отчёты о причинах сбоя
+    - Интеграция с системой оповещений
     """
 
     def __init__(self,
-                 db_service: DatabaseService,
-                 payment_processor: EnhancedPaymentProcessor,
-                 communicator: EmpatheticCommunicator,
-                 copywriting_service: CopywritingService,
-                 translation_service: TranslationService,
-                 blockchain_manager: Optional[SmartContractManager] = None):
-        super().__init__(service_name="saga_orchestrator")
-        self.db_service = db_service
-        self.payment_processor = payment_processor
-        self.communicator = communicator
-        self.copywriting_service = copywriting_service
-        self.translation_service = translation_service
-        self.blockchain_manager = blockchain_manager
-        self.active_tasks: Dict[str, TaskState] = {}
-        self._task_locks: Dict[str, asyncio.Lock] = {}
-        self._compensation_registry: Dict[TaskPhase, Callable] = {}
+                 log_dir: str = "data/logs/saga",
+                 timeout_default: int = 300):
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.timeout_default = timeout_default
+        self.active_sagas: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.RLock()
+        self.alert_manager = AlertManager()
+        self.audit_logger = AuditLogger()
+        self.payment_processor = EnhancedPaymentProcessor()
 
-        # Регистрация компенсирующих операций
-        self._register_compensation_handlers()
+        # Запуск фонового монитора таймаутов
+        self._start_timeout_monitor()
 
-        logger.info("Инициализирован оркестратор жизненного цикла задач (паттерн Сага)")
-
-    def _register_compensation_handlers(self):
-        """Регистрация обработчиков компенсирующих операций для каждой фазы"""
-        self._compensation_registry = {
-            TaskPhase.CONTRACT_SIGNING: self._compensate_contract_signing,
-            TaskPhase.PAYMENT_ESCROW: self._compensate_payment_escrow,
-            TaskPhase.EXECUTION: self._compensate_execution,
-            TaskPhase.DELIVERY: self._compensate_delivery,
-            TaskPhase.PAYMENT_RELEASE: self._compensate_payment_release,
-            TaskPhase.NFT_MINTING: self._compensate_nft_minting
-        }
-
-    async def _load_dependencies(self):
-        """Инициализация зависимостей"""
-        # Инициализация сервисов
-        await self.copywriting_service.initialize()
-        await self.translation_service.initialize()
-        await self.communicator.initialize()
-
-        self._initialized = True
-        logger.info("Зависимости оркестратора жизненного цикла инициализированы")
-
-    async def start_new_task(self, job_data: Dict[str, Any], platform: str) -> TaskState:
+    def execute_saga(self,
+                    saga_name: str,
+                    steps: List[SagaStep],
+                    context: Dict[str, Any] = None,
+                    timeout_seconds: Optional[int] = None) -> Tuple[bool, SagaExecutionLog]:
         """
-        Запуск нового жизненного цикла задачи
-        """
-        task_id = str(uuid4())
-        job_id = job_data.get('id') or job_data.get('job_id') or task_id
+        Выполнение цепочки шагов саги с автоматическим управлением откатами.
 
-        context = ExecutionContext(
-            task_id=task_id,
-            job_id=job_id,
-            platform=platform,
-            metadata={
-                "job_title": job_data.get('title', ''),
-                "job_description": job_data.get('description', ''),
-                "budget": job_data.get('budget'),
-                "deadline": job_data.get('deadline'),
-                "skills_required": job_data.get('skills', [])
+        Args:
+            saga_name: Имя саги для логирования
+            steps: Список шагов с действиями и компенсациями
+            context: Контекст выполнения (данные заказа, пользователя и т.д.)
+            timeout_seconds: Общий таймаут выполнения саги
+
+        Returns:
+            Кортеж (успех, журнал выполнения)
+        """
+        saga_id = str(uuid.uuid4())
+        timeout = timeout_seconds or self.timeout_default
+        context = context or {}
+
+        # Создание журнала выполнения
+        execution_log = SagaExecutionLog(
+            saga_id=saga_id,
+            saga_name=saga_name,
+            status=SagaStatus.PENDING,
+            steps=[],
+            started_at=datetime.now(),
+            context_snapshot=context.copy()
+        )
+
+        # Сохранение хеша состояния до выполнения
+        execution_log.hash_before = self._calculate_context_hash(context)
+
+        # Регистрация активной саги
+        with self._lock:
+            self.active_sagas[saga_id] = {
+                'log': execution_log,
+                'steps': steps,
+                'context': context,
+                'timeout_at': datetime.now() + timedelta(seconds=timeout),
+                'lock': threading.RLock()
             }
-        )
 
-        task_state = TaskState(
-            task_id=task_id,
-            job_id=job_id,
-            current_phase=TaskPhase.DISCOVERY,
-            phase_start_time=datetime.now(timezone.utc),
-            phase_attempts=0,
-            phase_data={"job_data": job_data, "platform": platform, "context": asdict(context)},
-            saga_steps_completed=[],
-            error_history=[],
-            compensation_log=[],
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)
-        )
-
-        # Сохранение начального состояния
-        await self._save_task_state(task_state)
-        self.active_tasks[task_id] = task_state
-
-        # Создание блокировки для задачи
-        self._task_locks[task_id] = asyncio.Lock()
-
-        logger.info(f"Запущен новый жизненный цикл задачи {task_id} для заказа {job_id}")
-
-        # Запуск асинхронной обработки в фоновом режиме
-        asyncio.create_task(self._process_task_lifecycle(task_state, context))
-
-        return task_state
-
-    async def _process_task_lifecycle(self, task_state: TaskState, context: ExecutionContext):
-        """
-        Основной цикл обработки задачи с автоматическими переходами между фазами
-        и поддержкой отката по паттерну Сага
-        """
-        max_attempts_per_phase = 3
-
-        while task_state.current_phase not in [TaskPhase.COMPLETED, TaskPhase.FAILED, TaskPhase.CANCELLED]:
-            current_phase = task_state.current_phase
-
-            # Создание блокировки для предотвращения параллельной обработки одной задачи
-            lock = self._task_locks.get(task_state.task_id)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._task_locks[task_state.task_id] = lock
-
-            async with lock:
-                try:
-                    # Выполнение фазы
-                    result = await self._execute_phase(current_phase, task_state, context)
-
-                    if result.success:
-                        # Успешное завершение фазы — переход к следующей
-                        await self._handle_phase_success(task_state, current_phase, result, context)
-                    else:
-                        # Ошибка в фазе
-                        task_state.phase_attempts += 1
-
-                        if task_state.phase_attempts >= max_attempts_per_phase or result.rollback_required:
-                            # Превышено количество попыток или требуется откат всей саги
-                            await self._handle_saga_failure(task_state, current_phase, result.error, context)
-                            break
-                        else:
-                            # Повторная попытка фазы
-                            logger.warning(
-                                f"Повторная попытка фазы {current_phase.value} для задачи {task_state.task_id} "
-                                f"(попытка {task_state.phase_attempts}/{max_attempts_per_phase})"
-                            )
-                            await asyncio.sleep(2 ** (task_state.phase_attempts - 1))  # Экспоненциальная задержка
-
-                except Exception as e:
-                    logger.exception(
-                        f"Необработанное исключение в фазе {current_phase.value} для задачи {task_state.task_id}")
-                    await self._handle_saga_failure(task_state, current_phase, str(e), context)
-                    break
-
-            # Сохранение состояния после каждой фазы
-            await self._save_task_state(task_state)
-
-        # Финальные действия по завершению задачи
-        await self._finalize_task(task_state, context)
-
-    async def _execute_phase(self, phase: TaskPhase, task_state: TaskState,
-                             context: ExecutionContext) -> ServiceResult:
-        """
-        Выполнение конкретной фазы жизненного цикла
-        """
-        phase_data = task_state.phase_data
-        job_data = phase_data.get('job_data', {})
+        self._log_saga_event(saga_id, f"Начало выполнения саги '{saga_name}' (ID: {saga_id})")
+        execution_log.status = SagaStatus.IN_PROGRESS
+        self._save_execution_log(execution_log)
 
         try:
-            if phase == TaskPhase.DISCOVERY:
-                # Анализ заказа через ИИ
-                analysis_prompt = f"""
-                Проанализируй заказ для фрилансера:
+            # Последовательное выполнение шагов
+            for step in steps:
+                step_result = self._execute_step(saga_id, step, context)
 
-                Название: {job_data.get('title', '')}
-                Описание: {job_data.get('description', '')}
-                Бюджет: {job_data.get('budget', 'не указан')}
-                Сроки: {job_data.get('deadline', 'не указаны')}
-                Навыки: {', '.join(job_data.get('skills', []))}
+                # Сохранение результата шага
+                execution_log.steps.append({
+                    'step_id': step.step_id,
+                    'name': step.name,
+                    'status': step_result['status'].value,
+                    'executed_at': datetime.now().isoformat(),
+                    'duration_ms': step_result['duration_ms'],
+                    'error': step_result.get('error'),
+                    'retry_attempts': step_result.get('retry_attempts', 0),
+                    'metadata': step.metadata
+                })
 
-                Верни анализ в формате JSON:
-                {{
-                    "is_suitable": boolean,
-                    "confidence": 0-100,
-                    "suitable_skills": ["skill1", "skill2"],
-                    "missing_skills": ["skill3"],
-                    "budget_assessment": "low/medium/high",
-                    "deadline_assessment": "tight/normal/loose",
-                    "risk_factors": ["factor1", "factor2"],
-                    "recommended_price": number,
-                    "estimated_hours": number
-                }}
-                """
+                self._save_execution_log(execution_log)
 
-                result = await self.copywriting_service.generate_content(
-                    prompt=analysis_prompt,
-                    tone="analytical",
-                    length=500,
-                    context=context
-                )
+                # Проверка результата шага
+                if step_result['status'] != SagaStepStatus.COMPLETED:
+                    error_msg = f"Шаг '{step.name}' завершился с ошибкой: {step_result.get('error', 'Неизвестная ошибка')}"
+                    self._log_saga_event(saga_id, error_msg, level='ERROR')
 
-                if result.success:
-                    try:
-                        analysis = json.loads(result.data)
-                        task_state.phase_data['job_analysis'] = analysis
-                        return ServiceResult.success(
-                            data=analysis,
-                            context=context,
-                            execution_time=0.0
-                        )
-                    except json.JSONDecodeError:
-                        return ServiceResult.failure(
-                            error="Не удалось распарсить анализ заказа",
-                            error_type="JSONDecodeError",
-                            stack_trace="",
-                            context=context,
-                            execution_time=0.0
-                        )
-                else:
-                    return result
+                    # Запуск процесса компенсации
+                    execution_log.status = SagaStatus.COMPENSATING
+                    self._save_execution_log(execution_log)
 
-            elif phase == TaskPhase.QUALIFICATION:
-                # Оценка возможности выполнения
-                analysis = task_state.phase_data.get('job_analysis', {})
-                is_suitable = analysis.get('is_suitable', False)
-                confidence = analysis.get('confidence', 0)
+                    compensation_result = self._execute_compensation(saga_id, steps, context, step.step_id)
 
-                if not is_suitable or confidence < 60:
-                    return ServiceResult.failure(
-                        error="Заказ не подходит по критериям",
-                        error_type="QualificationFailed",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=False  # Не требует отката — просто отказ
+                    execution_log.status = SagaStatus.COMPENSATED if compensation_result else SagaStatus.FAILED
+                    execution_log.error_message = error_msg
+                    execution_log.error_step = step.step_id
+
+                    self._save_execution_log(execution_log)
+
+                    # Отправка алерта об ошибке
+                    self.alert_manager.send_alert(
+                        title=f"Сага '{saga_name}' завершилась с ошибкой",
+                        message=error_msg,
+                        severity='critical',
+                        metadata={
+                            'saga_id': saga_id,
+                            'failed_step': step.name,
+                            'compensation_success': compensation_result
+                        }
                     )
 
-                # Проверка доступности навыков
-                required_skills = analysis.get('suitable_skills', [])
-                available_skills = await self._get_available_skills()
+                    return False, execution_log
 
-                missing_skills = [s for s in required_skills if s not in available_skills]
-                if missing_skills:
-                    return ServiceResult.failure(
-                        error=f"Отсутствуют необходимые навыки: {', '.join(missing_skills)}",
-                        error_type="MissingSkills",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=False
-                    )
+            # Все шаги выполнены успешно
+            execution_log.status = SagaStatus.COMPLETED
+            execution_log.completed_at = datetime.now()
+            execution_log.hash_after = self._calculate_context_hash(context)
 
-                qualification_result = {
-                    "qualified": True,
-                    "confidence": confidence,
-                    "suitable_skills": required_skills,
-                    "budget_recommendation": analysis.get('recommended_price'),
-                    "time_estimate_hours": analysis.get('estimated_hours', 10)
-                }
+            self._save_execution_log(execution_log)
+            self._log_saga_event(saga_id, f"Сага '{saga_name}' успешно завершена")
 
-                task_state.phase_data['qualification_result'] = qualification_result
-                return ServiceResult.success(
-                    data=qualification_result,
-                    context=context,
-                    execution_time=0.0
-                )
+            # Удаление из активных саг
+            with self._lock:
+                self.active_sagas.pop(saga_id, None)
 
-            elif phase == TaskPhase.BIDDING:
-                # Генерация предложения через ИИ
-                analysis = task_state.phase_data.get('job_analysis', {})
-                qualification = task_state.phase_data.get('qualification_result', {})
+            return True, execution_log
 
-                bid_prompt = f"""
-                Напиши профессиональное предложение для заказа:
-
-                Заказ: {job_data.get('title', '')}
-                Описание: {job_data.get('description', '')[:200]}...
-                Бюджет клиента: {job_data.get('budget', 'не указан')}
-                Рекомендуемая цена: ${qualification.get('budget_recommendation', 'N/A')}
-                Оценка времени: {qualification.get('time_estimate_hours', 'N/A')} часов
-
-                Требования к предложению:
-                - Персонализированное обращение к клиенту
-                - Демонстрация понимания задачи
-                - Описание подхода к решению
-                - Упоминание релевантного опыта
-                - Четкое указание сроков и цены
-                - Призыв к действию
-
-                Объем: 150-200 слов
-                Тон: профессиональный, уверенный, но не агрессивный
-                """
-
-                result = await self.copywriting_service.generate_content(
-                    prompt=bid_prompt,
-                    tone="professional",
-                    length=250,
-                    context=context
-                )
-
-                if result.success:
-                    bid_content = result.data
-
-                    # Генерация структурированного предложения
-                    bid_data = {
-                        "cover_letter": bid_content,
-                        "amount": qualification.get('budget_recommendation', job_data.get('budget', 100)),
-                        "currency": job_data.get('currency', 'USD'),
-                        "delivery_time_days": max(1, int(qualification.get('time_estimate_hours', 10) / 8)),
-                        "skills_demonstrated": qualification.get('suitable_skills', [])
-                    }
-
-                    task_state.phase_data['bid_data'] = bid_data
-                    return ServiceResult.success(
-                        data=bid_data,
-                        context=context,
-                        execution_time=0.0
-                    )
-                else:
-                    return result
-
-            elif phase == TaskPhase.CONTRACT_SIGNING:
-                # Подписание контракта через блокчейн
-                if not self.blockchain_manager:
-                    return ServiceResult.failure(
-                        error="Блокчейн-менеджер не инициализирован",
-                        error_type="BlockchainNotAvailable",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=True
-                    )
-
-                bid_data = task_state.phase_data.get('bid_data', {})
-                contract_terms = {
-                    "job_id": task_state.job_id,
-                    "freelancer_address": context.user_id,  # Предполагается, что user_id = адрес кошелька
-                    "client_address": job_data.get('client_address', '0x0'),
-                    "amount": bid_data.get('amount', 0),
-                    "currency": bid_data.get('currency', 'USD'),
-                    "delivery_deadline": datetime.now(timezone.utc).timestamp() +
-                                         (bid_data.get('delivery_time_days', 7) * 86400),
-                    "milestones": [
-                        {"percentage": 30, "description": "Предоплата"},
-                        {"percentage": 70, "description": "После доставки"}
-                    ]
-                }
-
-                # Деплой контракта (в реальной системе используется существующий шаблон)
-                tx_hash = await self._deploy_job_contract(contract_terms)
-
-                if tx_hash:
-                    task_state.phase_data['contract_address'] = tx_hash
-                    task_state.blockchain_tx_hash = tx_hash
-                    return ServiceResult.success(
-                        data={"contract_address": tx_hash, "terms": contract_terms},
-                        context=context,
-                        execution_time=0.0
-                    )
-                else:
-                    return ServiceResult.failure(
-                        error="Не удалось задеплоить контракт",
-                        error_type="ContractDeploymentFailed",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=True
-                    )
-
-            elif phase == TaskPhase.PAYMENT_ESCROW:
-                # Депозит платежа в эскроу
-                contract_address = task_state.phase_data.get('contract_address')
-                bid_data = task_state.phase_data.get('bid_data', {})
-
-                if not contract_address:
-                    return ServiceResult.failure(
-                        error="Контракт не задеплоен",
-                        error_type="ContractNotDeployed",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=True
-                    )
-
-                # В реальной системе здесь вызов смарт-контракта для депозита
-                escrow_tx = await self._deposit_to_escrow(
-                    contract_address=contract_address,
-                    amount=bid_data.get('amount', 0),
-                    currency=bid_data.get('currency', 'USD')
-                )
-
-                if escrow_tx:
-                    task_state.escrow_contract_address = contract_address
-                    task_state.phase_data['escrow_tx'] = escrow_tx
-                    return ServiceResult.success(
-                        data={"escrow_tx": escrow_tx, "contract_address": contract_address},
-                        context=context,
-                        execution_time=0.0
-                    )
-                else:
-                    return ServiceResult.failure(
-                        error="Не удалось депонировать платеж в эскроу",
-                        error_type="EscrowDepositFailed",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=True
-                    )
-
-            elif phase == TaskPhase.EXECUTION:
-                # Выполнение работы (интеграция с ИИ-сервисами)
-                bid_data = task_state.phase_data.get('bid_data', {})
-                skills = bid_data.get('skills_demonstrated', [])
-
-                # Определение типа работы и выбор соответствующего ИИ-сервиса
-                deliverables = {}
-
-                if 'writing' in skills or 'copywriting' in skills:
-                    content_prompt = f"Напиши качественный контент на тему: {job_data.get('description', '')[:100]}"
-                    content_result = await self.copywriting_service.generate_content(
-                        prompt=content_prompt,
-                        tone="professional",
-                        length=500,
-                        context=context
-                    )
-                    if content_result.success:
-                        deliverables['copywriting'] = content_result.data
-
-                if 'translation' in skills:
-                    source_text = job_data.get('source_text', 'Sample text for translation')
-                    translation_result = await self.translation_service.translate_text(
-                        text=source_text,
-                        target_language=job_data.get('target_language', 'ru'),
-                        context=context
-                    )
-                    if translation_result.success:
-                        deliverables['translation'] = translation_result.data
-
-                if 'editing' in skills:
-                    text_to_edit = job_data.get('text_to_edit', 'Sample text for editing')
-                    editing_result = await self.copywriting_service.improve_text(
-                        text=text_to_edit,
-                        context=context
-                    )
-                    if editing_result.success:
-                        deliverables['editing'] = editing_result.data
-
-                if deliverables:
-                    task_state.phase_data['deliverables'] = deliverables
-                    return ServiceResult.success(
-                        data=deliverables,
-                        context=context,
-                        execution_time=0.0
-                    )
-                else:
-                    return ServiceResult.failure(
-                        error="Не удалось сгенерировать результаты работы",
-                        error_type="ExecutionFailed",
-                        stack_trace="",
-                        context=context,
-                        execution_time=0.0,
-                        rollback_required=True
-                    )
-
-            # ... остальные фазы (сокращено для краткости) ...
-
-            else:
-                return ServiceResult.failure(
-                    error=f"Неизвестная фаза: {phase.value}",
-                    error_type="UnknownPhase",
-                    stack_trace="",
-                    context=context,
-                    execution_time=0.0
-                )
-
-        except asyncio.TimeoutError:
-            return ServiceResult.failure(
-                error=f"Таймаут выполнения фазы {phase.value}",
-                error_type="TimeoutError",
-                stack_trace="",
-                context=context,
-                execution_time=0.0,
-                rollback_required=True
-            )
         except Exception as e:
-            return ServiceResult.failure(
-                error=f"Ошибка в фазе {phase.value}: {str(e)}",
-                error_type=type(e).__name__,
-                stack_trace="",
-                context=context,
-                execution_time=0.0,
-                rollback_required=True
+            # Обработка неожиданных исключений
+            error_msg = f"Критическая ошибка при выполнении саги: {str(e)}"
+            self._log_saga_event(saga_id, error_msg, level='CRITICAL')
+
+            execution_log.status = SagaStatus.FAILED
+            execution_log.error_message = error_msg
+            execution_log.completed_at = datetime.now()
+
+            self._save_execution_log(execution_log)
+
+            # Попытка компенсации даже при критической ошибке
+            try:
+                self._execute_compensation(saga_id, steps, context, None)
+                execution_log.status = SagaStatus.COMPENSATED
+                self._save_execution_log(execution_log)
+            except Exception as ce:
+                self._log_saga_event(saga_id, f"Ошибка компенсации: {ce}", level='ERROR')
+
+            # Отправка критического алерта
+            self.alert_manager.send_alert(
+                title=f"КРИТИЧЕСКАЯ ОШИБКА в саге '{saga_name}'",
+                message=error_msg,
+                severity='critical',
+                metadata={
+                    'saga_id': saga_id,
+                    'exception_type': type(e).__name__,
+                    'traceback': str(e.__traceback__)
+                }
             )
 
-    async def _handle_phase_success(self, task_state: TaskState, phase: TaskPhase,
-                                    result: ServiceResult, context: ExecutionContext):
-        """Обработка успешного завершения фазы и переход к следующей"""
-        # Сохранение результатов фазы
-        task_state.phase_data[f"{phase.value}_result"] = result.data
-        task_state.saga_steps_completed.append(phase)
+            with self._lock:
+                self.active_sagas.pop(saga_id, None)
 
-        # Определение следующей фазы
-        next_phase = self._get_next_phase(phase, result.data)
+            return False, execution_log
 
-        if next_phase:
-            task_state.current_phase = next_phase
-            task_state.phase_start_time = datetime.now(timezone.utc)
-            task_state.phase_attempts = 0
-            logger.info(f"Задача {task_state.task_id} перешла в фазу {next_phase.value}")
-        else:
-            # Завершение жизненного цикла
-            task_state.current_phase = TaskPhase.COMPLETED
-            logger.info(f"Жизненный цикл задачи {task_state.task_id} успешно завершен")
+    def _execute_step(self,
+                     saga_id: str,
+                     step: SagaStep,
+                     context: Dict[str, Any]) -> Dict[str, Any]:
+        """Выполнение одного шага саги с повторными попытками"""
+        step_start = time.time()
+        retry_attempts = 0
+        last_error = None
 
-    def _get_next_phase(self, current_phase: TaskPhase, phase_result: Any) -> Optional[TaskPhase]:
-        """Логика переходов между фазами с учетом результатов текущей фазы"""
-        # Стандартный поток выполнения
-        flow = {
-            TaskPhase.DISCOVERY: TaskPhase.QUALIFICATION,
-            TaskPhase.QUALIFICATION: TaskPhase.BIDDING,
-            TaskPhase.BIDDING: TaskPhase.NEGOTIATION,
-            TaskPhase.NEGOTIATION: TaskPhase.CONTRACT_SIGNING,
-            TaskPhase.CONTRACT_SIGNING: TaskPhase.PAYMENT_ESCROW,
-            TaskPhase.PAYMENT_ESCROW: TaskPhase.EXECUTION,
-            TaskPhase.EXECUTION: TaskPhase.QUALITY_CHECK,
-            TaskPhase.QUALITY_CHECK: TaskPhase.CLIENT_REVIEW,
-            TaskPhase.CLIENT_REVIEW: TaskPhase.DELIVERY,
-            TaskPhase.DELIVERY: TaskPhase.PAYMENT_RELEASE,
-            TaskPhase.PAYMENT_RELEASE: TaskPhase.FEEDBACK,
-            TaskPhase.FEEDBACK: TaskPhase.NFT_MINTING,
-            TaskPhase.NFT_MINTING: TaskPhase.COMPLETED
-        }
+        self._log_saga_event(saga_id, f"Выполнение шага '{step.name}'")
 
-        # Специальная логика для отказа в квалификации
-        if current_phase == TaskPhase.QUALIFICATION and isinstance(phase_result, dict):
-            if not phase_result.get('qualified', False):
-                logger.info(f"Заказ не прошел квалификацию — завершение жизненного цикла")
-                return None  # Завершение без перехода
-
-        # Специальная логика для правок
-        if current_phase == TaskPhase.CLIENT_REVIEW and isinstance(phase_result, dict):
-            if phase_result.get('requires_revision', False):
-                return TaskPhase.REVISION
-
-        if current_phase == TaskPhase.REVISION:
-            return TaskPhase.QUALITY_CHECK  # Возврат на проверку после правок
-
-        return flow.get(current_phase)
-
-    async def _handle_saga_failure(self, task_state: TaskPhase,
-                                   failed_phase: TaskPhase,
-                                   error: str,
-                                   context: ExecutionContext):
-        """
-        Обработка ошибки с выполнением компенсирующих операций по паттерну Сага
-        """
-        error_record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "phase": failed_phase.value,
-            "error": error,
-            "task_id": task_state.task_id
-        }
-        task_state.error_history.append(error_record)
-
-        logger.error(f"Ошибка в фазе {failed_phase.value} задачи {task_state.task_id}: {error}")
-
-        # Выполнение компенсирующих операций в обратном порядке
-        compensation_errors = []
-
-        for completed_phase in reversed(task_state.saga_steps_completed):
-            if completed_phase in self._compensation_registry:
-                try:
-                    compensate_fn = self._compensation_registry[completed_phase]
-                    compensation_result = await compensate_fn(task_state, context)
-
-                    compensation_log = {
-                        "phase": completed_phase.value,
-                        "compensated_at": datetime.now(timezone.utc).isoformat(),
-                        "success": compensation_result.get('success', False),
-                        "details": compensation_result
-                    }
-                    task_state.compensation_log.append(compensation_log)
-
-                    if compensation_result.get('success'):
-                        logger.info(f"Компенсация фазы {completed_phase.value} выполнена успешно")
-                    else:
-                        compensation_errors.append(
-                            f"Фаза {completed_phase.value}: {compensation_result.get('error', 'Неизвестная ошибка')}"
-                        )
-                except Exception as e:
-                    compensation_errors.append(f"Фаза {completed_phase.value}: Исключение {str(e)}")
-                    logger.error(f"Ошибка компенсации фазы {completed_phase.value}: {str(e)}")
-
-        # Пометка задачи как неудачной
-        task_state.current_phase = TaskPhase.FAILED
-
-        if compensation_errors:
-            logger.error(f"Ошибки компенсации для задачи {task_state.task_id}:")
-            for err in compensation_errors:
-                logger.error(f"  - {err}")
-
-    # Компенсирующие операции для критических фаз
-    async def _compensate_contract_signing(self, task_state: TaskState,
-                                           context: ExecutionContext) -> Dict[str, Any]:
-        """Отмена подписания контракта"""
-        contract_address = task_state.phase_data.get('contract_address')
-        if contract_address and self.blockchain_manager:
+        while retry_attempts <= step.retry_count:
             try:
-                # В реальной системе вызов функции отмены контракта
-                tx_hash = await self._cancel_contract(contract_address)
-                return {"success": True, "tx_hash": tx_hash}
+                # Проверка таймаута перед выполнением
+                with self._lock:
+                    saga_info = self.active_sagas.get(saga_id)
+                    if saga_info and datetime.now() > saga_info['timeout_at']:
+                        raise TimeoutError(f"Таймаут выполнения шага '{step.name}'")
+
+                # Выполнение действия шага
+                step_status = SagaStepStatus.EXECUTING
+                result = step.action(context)
+
+                # Проверка необходимости подтверждения
+                if step.requires_confirmation:
+                    if not self._await_confirmation(saga_id, step, context):
+                        raise RuntimeError("Шаг требует подтверждения, которое не получено")
+
+                duration_ms = (time.time() - step_start) * 1000
+                self._log_saga_event(saga_id, f"Шаг '{step.name}' успешно выполнен за {duration_ms:.2f} мс")
+
+                return {
+                    'status': SagaStepStatus.COMPLETED,
+                    'duration_ms': duration_ms,
+                    'retry_attempts': retry_attempts,
+                    'result': result
+                }
+
             except Exception as e:
-                return {"success": False, "error": str(e)}
-        return {"success": True, "message": "Контракт не требует компенсации"}
-
-    async def _compensate_payment_escrow(self, task_state: TaskState,
-                                         context: ExecutionContext) -> Dict[str, Any]:
-        """Возврат платежа из эскроу"""
-        escrow_address = task_state.escrow_contract_address
-        if escrow_address and self.payment_processor:
-            try:
-                refund_result = await self.payment_processor.refund_payment(
-                    payment_id=task_state.phase_data.get('escrow_tx', ''),
-                    reason="Saga compensation"
+                retry_attempts += 1
+                last_error = str(e)
+                self._log_saga_event(
+                    saga_id,
+                    f"Попытка {retry_attempts} шага '{step.name}' завершилась ошибкой: {e}",
+                    level='WARNING'
                 )
-                return {"success": refund_result.get('success', False), "details": refund_result}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-        return {"success": True, "message": "Эскроу не требует компенсации"}
 
-    async def _compensate_execution(self, task_state: TaskState,
-                                    context: ExecutionContext) -> Dict[str, Any]:
-        """Отмена выполнения работы (удаление промежуточных результатов)"""
-        # Удаление временных файлов и промежуточных результатов
-        deliverables = task_state.phase_data.get('deliverables', {})
-        # В реальной системе удаление файлов из хранилища
-        return {"success": True, "message": "Промежуточные результаты удалены"}
+                if retry_attempts <= step.retry_count:
+                    time.sleep(step.retry_delay_seconds * (2 ** (retry_attempts - 1)))  # Экспоненциальная задержка
 
-    async def _compensate_delivery(self, task_state: TaskState,
-                                   context: ExecutionContext) -> Dict[str, Any]:
-        """Отзыв доставленных материалов (если возможно)"""
-        # В реальной системе отправка запроса на удаление материалов у клиента
-        # или пометка материалов как "отозванных"
-        return {"success": True, "message": "Запрос на отзыв материалов отправлен"}
-
-    async def _compensate_payment_release(self, task_state: TaskState,
-                                          context: ExecutionContext) -> Dict[str, Any]:
-        """Блокировка выплаченных средств (требует юридической поддержки)"""
-        # В реальной системе запрос в службу поддержки для заморозки средств
-        return {"success": False, "error": "Требуется ручное вмешательство юридической службы"}
-
-    async def _compensate_nft_minting(self, task_state: TaskState,
-                                      context: ExecutionContext) -> Dict[str, Any]:
-        """Сжигание или отзыв репутационного NFT"""
-        nft_data = task_state.phase_data.get('nft_data', {})
-        token_id = nft_data.get('token_id')
-        if token_id and self.blockchain_manager:
-            try:
-                # В реальной системе вызов функции сжигания NFT
-                tx_hash = await self._burn_nft(token_id)
-                return {"success": True, "tx_hash": tx_hash}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-        return {"success": True, "message": "NFT не требует компенсации"}
-
-    # Вспомогательные методы для блокчейн-операций (заглушки для демо)
-    async def _deploy_job_contract(self, terms: Dict) -> Optional[str]:
-        """Заглушка для деплоя контракта"""
-        return f"0xContract_{uuid4().hex[:8]}"
-
-    async def _deposit_to_escrow(self, contract_address: str, amount: float, currency: str) -> Optional[str]:
-        """Заглушка для депозита в эскроу"""
-        return f"0xEscrowTx_{uuid4().hex[:8]}"
-
-    async def _cancel_contract(self, contract_address: str) -> Optional[str]:
-        """Заглушка для отмены контракта"""
-        return f"0xCancelTx_{uuid4().hex[:8]}"
-
-    async def _burn_nft(self, token_id: int) -> Optional[str]:
-        """Заглушка для сжигания NFT"""
-        return f"0xBurnTx_{uuid4().hex[:8]}"
-
-    async def _get_available_skills(self) -> List[str]:
-        """Получение доступных навыков системы"""
-        return [
-            "writing", "copywriting", "editing", "translation", "proofreading",
-            "seo", "content_strategy", "technical_writing", "creative_writing"
-        ]
-
-    async def _save_task_state(self, task_state: TaskState):
-        """Сохранение состояния задачи для восстановления после сбоя"""
-        task_state.updated_at = datetime.now(timezone.utc)
-
-        # Сохранение в основную БД
-        await self.db_service.save_task_state(task_state.to_dict())
-
-        # Дублирование в файловый кэш для быстрого восстановления
-        cache_path = f"data/cache/task_states/{task_state.task_id}.json"
-        import os
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-
-        with open(cache_path, 'w', encoding='utf-8') as f:
-            json.dump(task_state.to_dict(), f, ensure_ascii=False, indent=2)
-
-    async def recover_task(self, task_id: str) -> Optional[TaskState]:
-        """Восстановление задачи после сбоя системы"""
-        # Попытка загрузки из файлового кэша
-        cache_path = f"data/cache/task_states/{task_id}.json"
-        import os
-
-        if os.path.exists(cache_path):
-            try:
-                with open(cache_path, 'r', encoding='utf-8') as f:
-                    state_dict = json.load(f)
-                    task_state = TaskState.from_dict(state_dict)
-                    self.active_tasks[task_id] = task_state
-                    self._task_locks[task_id] = asyncio.Lock()
-
-                    logger.info(f"Задача {task_id} восстановлена из кэша")
-
-                    # Возобновление обработки
-                    context = ExecutionContext(**task_state.phase_data.get('context', {}))
-                    asyncio.create_task(self._process_task_lifecycle(task_state, context))
-                    return task_state
-            except Exception as e:
-                logger.error(f"Ошибка восстановления задачи из кэша: {str(e)}")
-
-        # Попытка загрузки из основной БД
-        try:
-            state_dict = await self.db_service.load_task_state(task_id)
-            if state_dict:
-                task_state = TaskState.from_dict(state_dict)
-                self.active_tasks[task_id] = task_state
-                self._task_locks[task_id] = asyncio.Lock()
-
-                logger.info(f"Задача {task_id} восстановлена из БД")
-                context = ExecutionContext(**task_state.phase_data.get('context', {}))
-                asyncio.create_task(self._process_task_lifecycle(task_state, context))
-                return task_state
-        except Exception as e:
-            logger.error(f"Ошибка восстановления задачи из БД: {str(e)}")
-
-        return None
-
-    async def health_check(self) -> Dict[str, Any]:
-        """Проверка здоровья оркестратора"""
-        base_health = await super().health_check()
-
-        active_count = len([t for t in self.active_tasks.values()
-                            if t.current_phase not in [TaskPhase.COMPLETED, TaskPhase.FAILED]])
+        # Все попытки исчерпаны
+        duration_ms = (time.time() - step_start) * 1000
+        self._log_saga_event(
+            saga_id,
+            f"Шаг '{step.name}' завершился неудачей после {retry_attempts} попыток: {last_error}",
+            level='ERROR'
+        )
 
         return {
-            **base_health,
-            "active_tasks": active_count,
-            "total_tasks": len(self.active_tasks),
-            "completed_tasks": len([t for t in self.active_tasks.values()
-                                    if t.current_phase == TaskPhase.COMPLETED]),
-            "failed_tasks": len([t for t in self.active_tasks.values()
-                                 if t.current_phase == TaskPhase.FAILED]),
-            "blockchain_integration": self.blockchain_manager is not None,
-            "compensation_handlers_registered": len(self._compensation_registry)
+            'status': SagaStepStatus.FAILED,
+            'duration_ms': duration_ms,
+            'retry_attempts': retry_attempts,
+            'error': last_error
         }
+
+    def _execute_compensation(self,
+                            saga_id: str,
+                            steps: List[SagaStep],
+                            context: Dict[str, Any],
+                            failed_step_id: Optional[str]) -> bool:
+        """
+        Выполнение компенсирующих действий для отката изменений.
+
+        Args:
+            saga_id: ID саги
+            steps: Все шаги саги
+            context: Контекст выполнения
+            failed_step_id: ID шага, на котором произошла ошибка (откатываем все предыдущие)
+
+        Returns:
+            True если все компенсации успешны, иначе False
+        """
+        self._log_saga_event(saga_id, "Начало процесса компенсации (отката)")
+
+        # Определение шагов для компенсации (в обратном порядке)
+        steps_to_compensate = []
+        for step in reversed(steps):
+            if failed_step_id is None or step.step_id == failed_step_id:
+                failed_step_id = None  # Начинаем компенсацию с этого шага
+                steps_to_compensate.append(step)
+            elif failed_step_id == "":
+                break
+
+        all_compensated = True
+
+        for step in steps_to_compensate:
+            try:
+                self._log_saga_event(saga_id, f"Выполнение компенсации для шага '{step.name}'")
+
+                # Выполнение компенсирующего действия
+                step.compensation(context)
+
+                self._log_saga_event(saga_id, f"Компенсация шага '{step.name}' успешно выполнена")
+
+            except Exception as e:
+                all_compensated = False
+                self._log_saga_event(
+                    saga_id,
+                    f"Ошибка компенсации шага '{step.name}': {e}",
+                    level='ERROR'
+                )
+
+                # Продолжаем компенсацию остальных шагов даже при ошибке
+                continue
+
+        status = "успешно" if all_compensated else "частично"
+        self._log_saga_event(saga_id, f"Процесс компенсации завершен ({status})")
+
+        return all_compensated
+
+    def _await_confirmation(self,
+                          saga_id: str,
+                          step: SagaStep,
+                          context: Dict[str, Any],
+                          timeout_seconds: int = 300) -> bool:
+        """
+        Ожидание подтверждения выполнения шага (например, подтверждение оплаты).
+        """
+        self._log_saga_event(saga_id, f"Ожидание подтверждения для шага '{step.name}'")
+
+        start_time = time.time()
+
+        while time.time() - start_time < timeout_seconds:
+            # Проверка статуса подтверждения (зависит от типа шага)
+            if step.name == "process_payment":
+                payment_id = context.get('payment_id')
+                if payment_id and self.payment_processor.is_payment_confirmed(payment_id):
+                    return True
+
+            # Для других типов шагов можно добавить кастомную логику проверки
+
+            time.sleep(5)  # Проверка каждые 5 секунд
+
+        return False
+
+    def recover_saga(self, saga_id: str) -> Optional[SagaExecutionLog]:
+        """
+        Восстановление выполнения саги после сбоя на основе журнала.
+
+        Args:
+            saga_id: ID саги для восстановления
+
+        Returns:
+            Восстановленный журнал выполнения или None если восстановление невозможно
+        """
+        # Поиск журнала в файловой системе
+        log_files = list(self.log_dir.glob(f"{saga_id}_*.json"))
+
+        if not log_files:
+            self._log_saga_event(saga_id, "Журнал саги не найден для восстановления", level='ERROR')
+            return None
+
+        # Загрузка последнего состояния
+        latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+
+        try:
+            with open(latest_log, 'r', encoding='utf-8') as f:
+                log_data = json.load(f)
+
+            execution_log = SagaExecutionLog.from_dict(log_data)
+
+            # Проверка статуса для определения необходимости восстановления
+            if execution_log.status in [SagaStatus.COMPLETED, SagaStatus.COMPENSATED, SagaStatus.FAILED]:
+                self._log_saga_event(saga_id, f"Сага уже завершена со статусом {execution_log.status.value}")
+                return execution_log
+
+            if execution_log.status == SagaStatus.TIMED_OUT:
+                self._log_saga_event(saga_id, "Сага превысила таймаут, запуск компенсации")
+                # Запуск компенсации для зависшей саги
+                # ... логика компенсации ...
+                return execution_log
+
+            # Восстановление контекста и продолжение выполнения
+            self._log_saga_event(saga_id, "Восстановление выполнения саги из журнала")
+
+            # Здесь должна быть логика продолжения выполнения с последнего успешного шага
+            # Для упрощения возвращаем текущее состояние
+
+            return execution_log
+
+        except Exception as e:
+            self._log_saga_event(saga_id, f"Ошибка восстановления саги: {e}", level='ERROR')
+            return None
+
+    def generate_human_readable_report(self, execution_log: SagaExecutionLog) -> str:
+        """
+        Генерация человеко-читаемого отчета о выполнении саги с анализом причин сбоя.
+
+        Returns:
+            Форматированный отчет в виде строки
+        """
+        report = []
+        report.append("=" * 80)
+        report.append(f"ОТЧЕТ О ВЫПОЛНЕНИИ САГИ: {execution_log.saga_name}")
+        report.append(f"ID саги: {execution_log.saga_id}")
+        report.append(f"Статус: {execution_log.status.value.upper()}")
+        report.append(f"Начало: {execution_log.started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        if execution_log.completed_at:
+            duration = execution_log.completed_at - execution_log.started_at
+            report.append(f"Завершение: {execution_log.completed_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            report.append(f"Общая длительность: {duration.total_seconds():.2f} сек")
+
+        report.append("-" * 80)
+        report.append("ДЕТАЛИЗАЦИЯ ШАГОВ:")
+        report.append("-" * 80)
+
+        for i, step in enumerate(execution_log.steps, 1):
+            status_icon = {
+                'completed': '✅',
+                'failed': '❌',
+                'compensated': '↩️',
+                'pending': '⏳'
+            }.get(step['status'], '❓')
+
+            duration = step.get('duration_ms', 0) / 1000
+            report.append(f"\n{i}. [{status_icon}] {step['name']}")
+            report.append(f"   Статус: {step['status']}")
+            report.append(f"   Длительность: {duration:.2f} сек")
+            report.append(f"   Попыток: {step.get('retry_attempts', 0)}")
+
+            if step.get('error'):
+                report.append(f"   ОШИБКА: {step['error']}")
+                # Анализ типа ошибки для рекомендаций
+                error_lower = step['error'].lower()
+                if 'timeout' in error_lower or 'timed out' in error_lower:
+                    report.append("   🔍 Рекомендация: Увеличить таймаут шага или проверить сетевую доступность")
+                elif 'connection' in error_lower or 'network' in error_lower:
+                    report.append("   🔍 Рекомендация: Проверить подключение к интернету и доступность внешних сервисов")
+                elif 'authentication' in error_lower or 'auth' in error_lower:
+                    report.append("   🔍 Рекомендация: Проверить учетные данные и права доступа к сервису")
+                elif 'quota' in error_lower or 'limit' in error_lower:
+                    report.append("   🔍 Рекомендация: Проверить лимиты использования внешнего API")
+                else:
+                    report.append("   🔍 Рекомендация: Проверить логи сервиса для детального анализа")
+
+        if execution_log.error_message:
+            report.append("\n" + "=" * 80)
+            report.append("АНАЛИЗ ПРИЧИНЫ СБОЯ:")
+            report.append("=" * 80)
+            report.append(f"Критическая ошибка на шаге: {execution_log.error_step or 'неизвестно'}")
+            report.append(f"Сообщение об ошибке: {execution_log.error_message}")
+
+            # Добавление контекстных рекомендаций
+            if 'payment' in execution_log.error_message.lower():
+                report.append("\n💡 Рекомендации по платежам:")
+                report.append("   • Проверить баланс на счете")
+                report.append("   • Убедиться в корректности реквизитов")
+                report.append("   • Проверить лимиты платежной системы")
+            elif 'platform' in execution_log.error_message.lower() or 'api' in execution_log.error_message.lower():
+                report.append("\n💡 Рекомендации по интеграции с платформой:")
+                report.append("   • Проверить актуальность API-ключей")
+                report.append("   • Убедиться в соблюдении rate limits")
+                report.append("   • Проверить изменения в API платформы")
+
+        # Хеш-суммы для аудита целостности
+        if execution_log.hash_before:
+            report.append("\n" + "=" * 80)
+            report.append("АУДИТ ЦЕЛОСТНОСТИ ДАННЫХ:")
+            report.append("=" * 80)
+            report.append(f"Хеш состояния до выполнения: {execution_log.hash_before}")
+            if execution_log.hash_after:
+                report.append(f"Хеш состояния после выполнения: {execution_log.hash_after}")
+                if execution_log.hash_before != execution_log.hash_after:
+                    report.append("⚠️  Обнаружены изменения в данных (ожидаемо для успешной транзакции)")
+                else:
+                    report.append("ℹ️  Состояние данных не изменилось")
+
+        report.append("\n" + "=" * 80)
+        report.append("КОНЕЦ ОТЧЕТА")
+        report.append("=" * 80)
+
+        return "\n".join(report)
+
+    def _calculate_context_hash(self, context: Dict[str, Any]) -> str:
+        """Расчет хеш-суммы контекста для аудита целостности"""
+        # Исключаем временные и чувствительные данные
+        filtered_context = {
+            k: v for k, v in context.items()
+            if k not in ['timestamp', 'auth_token', 'password', 'api_key']
+        }
+
+        context_str = json.dumps(filtered_context, sort_keys=True, default=str)
+        return hashlib.sha256(context_str.encode()).hexdigest()
+
+    def _save_execution_log(self, execution_log: SagaExecutionLog):
+        """Сохранение журнала выполнения в файл"""
+        timestamp = int(datetime.now().timestamp())
+        filename = f"{execution_log.saga_id}_{timestamp}.json"
+        filepath = self.log_dir / filename
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(execution_log.to_dict(), f, indent=2, ensure_ascii=False)
+
+        # Сохранение последнего состояния для быстрого доступа
+        latest_path = self.log_dir / f"{execution_log.saga_id}_latest.json"
+        with open(latest_path, 'w', encoding='utf-8') as f:
+            json.dump(execution_log.to_dict(), f, indent=2, ensure_ascii=False)
+
+    def _log_saga_event(self, saga_id: str, message: str, level: str = 'INFO'):
+        """Логирование событий саги с аудитом"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_entry = f"[{timestamp}] [{level}] Saga {saga_id}: {message}"
+
+        # Запись в файловый лог
+        log_file = self.log_dir / f"{saga_id}_events.log"
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(log_entry + '\n')
+
+        # Аудит критических событий
+        if level in ['ERROR', 'CRITICAL']:
+            self.audit_logger.log_security_event(
+                event_type='saga_failure',
+                description=message,
+                metadata={'saga_id': saga_id, 'level': level}
+            )
+
+    def _start_timeout_monitor(self):
+        """Запуск фонового монитора для контроля таймаутов активных саг"""
+        import threading
+
+        def monitor_loop():
+            while True:
+                time.sleep(60)  # Проверка каждую минуту
+
+                with self._lock:
+                    now = datetime.now()
+                    timed_out_sagas = []
+
+                    for saga_id, saga_info in list(self.active_sagas.items()):
+                        if now > saga_info['timeout_at']:
+                            timed_out_sagas.append(saga_id)
+
+                    for saga_id in timed_out_sagas:
+                        saga_info = self.active_sagas[saga_id]
+                        execution_log = saga_info['log']
+
+                        self._log_saga_event(saga_id, "Сага превысила таймаут выполнения", level='ERROR')
+
+                        execution_log.status = SagaStatus.TIMED_OUT
+                        execution_log.error_message = f"Таймаут выполнения: {self.timeout_default} секунд"
+                        execution_log.completed_at = now
+
+                        self._save_execution_log(execution_log)
+
+                        # Запуск компенсации в отдельном потоке
+                        threading.Thread(
+                            target=self._execute_compensation,
+                            args=(saga_id, saga_info['steps'], saga_info['context'], None),
+                            daemon=True
+                        ).start()
+
+                        self.active_sagas.pop(saga_id, None)
+
+        monitor_thread = threading.Thread(target=monitor_loop, daemon=True, name="SagaTimeoutMonitor")
+        monitor_thread.start()
+
+    def get_active_sagas_status(self) -> Dict[str, Dict[str, Any]]:
+        """Получение статуса всех активных саг"""
+        with self._lock:
+            status = {}
+            for saga_id, saga_info in self.active_sagas.items():
+                log = saga_info['log']
+                timeout_at = saga_info['timeout_at']
+                remaining = max(0, (timeout_at - datetime.now()).total_seconds())
+
+                status[saga_id] = {
+                    'saga_name': log.saga_name,
+                    'status': log.status.value,
+                    'started_at': log.started_at.isoformat(),
+                    'timeout_remaining_seconds': remaining,
+                    'steps_completed': len([s for s in log.steps if s['status'] == 'completed']),
+                    'total_steps': len(saga_info['steps'])
+                }
+            return status
+
+
+# Глобальный экземпляр оркестратора (паттерн Singleton)
+_saga_orchestrator_instance = None
+_saga_orchestrator_lock = threading.Lock()
+
+
+def get_saga_orchestrator(log_dir: str = "data/logs/saga") -> SagaOrchestrator:
+    """
+    Получение глобального экземпляра SagaOrchestrator (Singleton).
+
+    Returns:
+        Единый экземпляр оркестратора для всего приложения
+    """
+    global _saga_orchestrator_instance, _saga_orchestrator_lock
+
+    if _saga_orchestrator_instance is None:
+        with _saga_orchestrator_lock:
+            if _saga_orchestrator_instance is None:
+                _saga_orchestrator_instance = SagaOrchestrator(log_dir)
+
+    return _saga_orchestrator_instance

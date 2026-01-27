@@ -1,0 +1,263 @@
+# Единый файл конфигурации Docker Compose с поддержкой профилей
+# Использование:
+#   • Базовый запуск:            docker-compose up
+#   • С мониторингом:            docker-compose --profile monitoring up
+#   • Для тестирования:          docker-compose --profile test up
+#   • Полная конфигурация:       docker-compose --profile monitoring --profile test up
+
+version: '3.8'
+
+services:
+  # Основной сервис приложения
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prod
+    image: ai-freelance-automation:latest
+    container_name: ai-freelance-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "8080:8080"  # UI
+    environment:
+      - ENV=production
+      - DATABASE_URL=postgresql://user:password@db:5432/freelance_db
+      - REDIS_URL=redis://redis:6379/0
+      - BLOCKCHAIN_NETWORK=polygon
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # База данных PostgreSQL
+  db:
+    image: postgres:14-alpine
+    container_name: ai-freelance-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=freelance_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis для кэширования и очередей
+  redis:
+    image: redis:7-alpine
+    container_name: ai-freelance-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Веб-сервер Nginx (обратный прокси + SSL)
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    container_name: ai-freelance-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --- Сервисы профиля 'monitoring' (включаются флагом --profile monitoring) ---
+  grafana:
+    image: grafana/grafana:9.5.2
+    container_name: ai-freelance-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=secure_password_change_in_prod
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: ai-freelance-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheusdata:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: ai-freelance-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+
+  # --- Сервисы профиля 'test' (включаются флагом --profile test) ---
+  test-runner:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    container_name: ai-freelance-test-runner
+    restart: "no"
+    environment:
+      - ENV=test
+      - DATABASE_URL=postgresql://test:test@db-test:5432/test_db
+    volumes:
+      - .:/app
+      - ./test-reports:/app/test-reports
+    depends_on:
+      - db-test
+    networks:
+      - app-network
+    profiles:
+      - test
+    command: ["pytest", "tests/", "--junitxml=/app/test-reports/results.xml", "-v"]
+
+  db-test:
+    image: postgres:14-alpine
+    container_name: ai-freelance-db-test
+    environment:
+      - POSTGRES_DB=test_db
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+    volumes:
+      - pgtestdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+    profiles:
+      - test
+      -
+  healthcheck:
+    test: |
+      test -f /etc/nginx/ssl/cert.pem && 
+      test -f /etc/nginx/ssl/key.pem && 
+      openssl x509 -in /etc/nginx/ssl/cert.pem -noout -subject
+    interval: 30s
+    timeout: 10s
+    retries: 5
+    start_period: 60s
+    # Автоматическая генерация ключей при первом запуске
+    entrypoint: >
+      sh -c "
+        if [ ! -f /etc/nginx/ssl/cert.pem ] || [ ! -f /etc/nginx/ssl/key.pem ]; then
+          echo '🔐 Генерация безопасных SSL-ключей...' &&
+          python /app/scripts/setup/secure_key_generator.py --common-name localhost --force;
+        fi &&
+        nginx -g 'daemon off;'
+      "
+
+  # --- Сервисы профиля 'development' (включаются флагом --profile dev) ---
+  app-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: ai-freelance-app-dev
+    restart: unless-stopped
+    ports:
+      - "8001:8000"   # FastAPI dev
+      - "8081:8080"   # UI dev
+      - "5678:5678"   # Debugpy
+    environment:
+      - ENV=development
+      - DATABASE_URL=postgresql://user:password@db:5432/freelance_db
+      - DEBUG=true
+      - RELOAD=true
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
+    profiles:
+      - dev
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  grafanadata:
+  prometheusdata:
+  pgtestdata:

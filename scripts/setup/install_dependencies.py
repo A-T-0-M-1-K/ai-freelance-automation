@@ -55,7 +55,7 @@ class DependencyInstaller:
     """Интеллектуальный установщик зависимостей."""
 
     REQUIREMENTS_FILES = {
-        "base": "requirements.txt",
+        "base": "requirements-base.txt",
         "dev": "requirements-dev.txt",
         "prod": "requirements-prod.txt",
         "test": "requirements-test.txt",

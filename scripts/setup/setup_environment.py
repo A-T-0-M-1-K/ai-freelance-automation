@@ -116,7 +116,7 @@ def validate_critical_dependencies() -> None:
     if missing:
         logger.error(
             f"❌ Missing critical dependencies: {', '.join(missing)}\n"
-            "Please run: pip install -r requirements.txt"
+            "Please run: pip install -r requirements-base.txt"
         )
         sys.exit(1)
     logger.info("✅ Critical dependencies are installed.")

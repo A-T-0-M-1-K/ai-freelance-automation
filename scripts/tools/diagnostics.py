@@ -43,7 +43,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 AI_MODELS_DIR = PROJECT_ROOT / "ai" / "models"
 LOGS_DIR = PROJECT_ROOT / "logs"
 REQUIREMENTS_FILES = [
-    "requirements.txt",
+    "requirements-base.txt",
     "requirements-dev.txt",
     "requirements-prod.txt",
     "requirements-gpu.txt"
@@ -134,9 +134,9 @@ class DiagnosticsTool:
         """Check if required Python packages are installed."""
         try:
             # Read main requirements
-            req_file = PROJECT_ROOT / "requirements.txt"
+            req_file = PROJECT_ROOT / "requirements-base.txt"
             if not req_file.exists():
-                self.results["dependencies"] = {"status": "ERROR", "error": "requirements.txt not found"}
+                self.results["dependencies"] = {"status": "ERROR", "error": "requirements-base.txt not found"}
                 self.results["summary"]["failed"] += 1
                 return
 

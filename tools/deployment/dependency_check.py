@@ -34,7 +34,7 @@ class DependencyChecker:
         "production": "requirements-prod.txt",
         "testing": "requirements-test.txt",
         "gpu": "requirements-gpu.txt",
-        "default": "requirements.txt"
+        "default": "requirements-base.txt"
     }
 
     def __init__(self, project_root: Optional[Path] = None):
@@ -60,7 +60,7 @@ class DependencyChecker:
             return {}
 
     def _parse_requirements_file(self, req_file: Path) -> List[Requirement]:
-        """Parse a requirements.txt file into Requirement objects."""
+        """Parse a requirements-base.txt file into Requirement objects."""
         if not req_file.exists():
             logger.warning("Requirements file not found: %s", req_file)
             return []

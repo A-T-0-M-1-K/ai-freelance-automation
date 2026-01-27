@@ -1,0 +1,48 @@
+# Ядро приложения — минимальные зависимости для запуска без ML моделей
+# Использование: pip install -r requirements-base.txt
+
+# Веб и API
+fastapi>=0.100.0,<0.110.0
+uvicorn[standard]>=0.23.0,<0.25.0
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+
+# Базы данных
+sqlalchemy>=2.0.0,<3.0.0
+psycopg2-binary>=2.9.0,<3.0.0
+redis>=4.5.0,<5.0.0
+alembic>=1.10.0,<2.0.0
+
+# Безопасность
+cryptography>=41.0.0,<42.0.0
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.0,<2.0.0
+python-multipart>=0.0.6,<0.0.7
+
+# Утилиты
+python-dotenv>=1.0.0,<2.0.0
+pyyaml>=6.0.0,<7.0.0
+requests>=2.31.0,<3.0.0
+httpx>=0.24.0,<0.26.0
+tenacity>=8.2.0,<9.0.0
+schedule>=1.2.0,<2.0.0
+
+# Логирование и мониторинг
+structlog>=23.1.0,<24.0.0
+python-json-logger>=2.0.0,<3.0.0
+opentelemetry-api>=1.18.0,<2.0.0
+opentelemetry-sdk>=1.18.0,<2.0.0
+
+# Блокчейн (лёгкие зависимости)
+web3>=6.0.0,<7.0.0
+eth-account>=0.9.0,<0.10.0
+
+# Тестирование (минимум для запуска)
+pytest>=7.4.0,<8.0.0
+pytest-asyncio>=0.21.0,<0.22.0
+
+# Валидация
+jsonschema>=4.18.0,<5.0.0
+
+# Интернационализация
+babel>=2.13.0,<3.0.0

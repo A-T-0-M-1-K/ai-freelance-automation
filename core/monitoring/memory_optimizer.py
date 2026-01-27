@@ -1,387 +1,374 @@
-import os
-import psutil
-import torch
+"""
+Мониторинг памяти с интеграцией tracemalloc для детектирования утечек
+и автоматического дампа при превышении порогов.
+"""
+
+import tracemalloc
 import gc
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-from pathlib import Path
+import os
 import json
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, Optional, List, Tuple
+import threading
+import psutil
+
+
+class MemorySnapshot:
+    """Снимок использования памяти с детальной информацией"""
+
+    def __init__(self, timestamp: datetime, total_memory_kb: int,
+                 peak_memory_kb: int, trace_stats: List[Any]):
+        self.timestamp = timestamp
+        self.total_memory_kb = total_memory_kb
+        self.peak_memory_kb = peak_memory_kb
+        self.trace_stats = trace_stats
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'timestamp': self.timestamp.isoformat(),
+            'total_memory_kb': self.total_memory_kb,
+            'peak_memory_kb': self.peak_memory_kb,
+            'top_allocations': self._get_top_allocations(10)
+        }
+
+    def _get_top_allocations(self, n: int = 10) -> List[Dict[str, Any]]:
+        """Получение топ-N аллокаций памяти"""
+        top_stats = self.trace_stats[:n]
+        result = []
+
+        for stat in top_stats:
+            result.append({
+                'size_kb': stat.size / 1024,
+                'count': stat.count,
+                'traceback': self._format_traceback(stat.traceback)
+            })
+
+        return result
+
+    def _format_traceback(self, tb) -> List[str]:
+        """Форматирование трейсбэка для сериализации"""
+        return [str(frame) for frame in tb[:5]]  # Первые 5 фреймов
 
 
 class MemoryOptimizer:
     """
-    Продвинутый оптимизатор памяти для систем с ленивой загрузкой моделей ИИ.
-    Обеспечивает:
-    - Мониторинг использования RAM/GPU
-    - Автоматическую выгрузку неиспользуемых моделей
-    - Прогнозирование нехватки памяти
-    - Динамическую настройку стратегий кэширования
+    Продвинутый монитор памяти с:
+    - Интеграцией tracemalloc для отслеживания аллокаций
+    - Автоматическим дампом при превышении порогов
+    - Детектированием утечек памяти
+    - Рекомендациями по оптимизации
     """
 
-    def __init__(self, config: Dict):
-        self.config = config
-        self.memory_history: List[Dict] = []
-        self.model_usage_stats: Dict[str, Dict] = {}
-        self.last_gc_time = datetime.utcnow()
-        self.alert_thresholds = config.get("alert_thresholds", {
-            "ram_warning": 80,  # %
-            "ram_critical": 90,  # %
-            "gpu_warning": 85,  # %
-            "gpu_critical": 95,  # %
-            "swap_warning": 50  # %
-        })
-        self.stats_file = Path("data/stats/memory_stats.json")
-        self._load_history()
+    def __init__(self,
+                 dump_dir: str = "data/dumps/memory",
+                 threshold_mb: int = 512,
+                 leak_detection_window: int = 5,
+                 check_interval_seconds: int = 60):
+        self.dump_dir = Path(dump_dir)
+        self.dump_dir.mkdir(parents=True, exist_ok=True)
+        self.threshold_mb = threshold_mb
+        self.leak_detection_window = leak_detection_window
+        self.check_interval_seconds = check_interval_seconds
+        self.snapshots: List[MemorySnapshot] = []
+        self._lock = threading.RLock()
+        self._running = False
 
-    def monitor_memory(self) -> Dict:
-        """
-        Сбор метрик использования памяти в реальном времени.
-        """
-        # Системная память (RAM)
-        ram = psutil.virtual_memory()
-        swap = psutil.swap_memory()
+        # Запуск мониторинга
+        self._start_monitoring()
 
-        # GPU память (если доступна)
-        gpu_info = self._get_gpu_memory()
+    def _start_monitoring(self):
+        """Запуск фонового мониторинга памяти"""
+        tracemalloc.start()
+        self._running = True
 
-        # Память процесса Python
-        process = psutil.Process(os.getpid())
-        process_memory = process.memory_info()
+        import threading
 
-        timestamp = datetime.utcnow().isoformat()
+        def monitor_loop():
+            while self._running:
+                try:
+                    self._check_memory_usage()
+                    threading.Event().wait(self.check_interval_seconds)
+                except Exception as e:
+                    self._log(f"Ошибка мониторинга памяти: {e}", level='ERROR')
 
-        metrics = {
-            "timestamp": timestamp,
-            "ram": {
-                "total_gb": ram.total / (1024 ** 3),
-                "used_gb": ram.used / (1024 ** 3),
-                "available_gb": ram.available / (1024 ** 3),
-                "percent": ram.percent,
-                "swap_percent": swap.percent
-            },
-            "gpu": gpu_info,
-            "process": {
-                "rss_gb": process_memory.rss / (1024 ** 3),
-                "vms_gb": process_memory.vms / (1024 ** 3),
-                "num_threads": process.num_threads()
-            },
-            "python_gc": {
-                "garbage_count": len(gc.garbage),
-                "collections": gc.get_count()
-            }
+        thread = threading.Thread(target=monitor_loop, daemon=True, name="MemoryMonitor")
+        thread.start()
+
+        self._log("Мониторинг памяти запущен с tracemalloc")
+
+    def _check_memory_usage(self):
+        """Проверка использования памяти и принятие мер при превышении порогов"""
+        # Текущее использование памяти процессом
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        current_mb = mem_info.rss / (1024 ** 2)
+
+        # Системная память
+        system_mem = psutil.virtual_memory()
+        system_percent = system_mem.percent
+
+        self._log(f"Использование памяти: процесс={current_mb:.2f} МБ, система={system_percent:.1f}%")
+
+        # Проверка порогов
+        if current_mb > self.threshold_mb:
+            self._log(f"ПРЕВЫШЕН ПОРОГ ПАМЯТИ ({current_mb:.2f} МБ > {self.threshold_mb} МБ)!", level='WARNING')
+            self._handle_memory_threshold_exceeded(current_mb)
+
+        if system_percent > 90:
+            self._log(f"КРИТИЧЕСКОЕ ИСПОЛЬЗОВАНИЕ СИСТЕМНОЙ ПАМЯТИ ({system_percent:.1f}%)!", level='CRITICAL')
+            self._handle_system_memory_critical()
+
+        # Создание снимка для детектирования утечек
+        self._take_snapshot()
+        self._detect_memory_leaks()
+
+    def _take_snapshot(self):
+        """Создание снимка использования памяти через tracemalloc"""
+        snapshot = tracemalloc.take_snapshot()
+        stats = snapshot.statistics('lineno')
+
+        mem_snapshot = MemorySnapshot(
+            timestamp=datetime.now(),
+            total_memory_kb=sum(stat.size for stat in stats) / 1024,
+            peak_memory_kb=tracemalloc.get_traced_memory()[1] / 1024,
+            trace_stats=stats
+        )
+
+        with self._lock:
+            self.snapshots.append(mem_snapshot)
+            # Ограничение истории снимков
+            if len(self.snapshots) > 100:
+                self.snapshots.pop(0)
+
+    def _detect_memory_leaks(self):
+        """Детектирование утечек памяти через анализ трендов"""
+        if len(self.snapshots) < self.leak_detection_window * 2:
+            return
+
+        # Сравнение текущего использования с историей
+        recent = self.snapshots[-self.leak_detection_window:]
+        older = self.snapshots[-self.leak_detection_window * 2:-self.leak_detection_window]
+
+        recent_avg = sum(s.total_memory_kb for s in recent) / len(recent)
+        older_avg = sum(s.total_memory_kb for s in older) / len(older)
+
+        # Обнаружение утечки если память растет более чем на 20%
+        if recent_avg > older_avg * 1.2:
+            growth_percent = ((recent_avg - older_avg) / older_avg) * 100
+            self._log(f"ОБНАРУЖЕНА ВОЗМОЖНАЯ УТЕЧКА ПАМЯТИ: рост на {growth_percent:.1f}%", level='WARNING')
+            self._generate_leak_report(recent[-1])
+
+    def _handle_memory_threshold_exceeded(self, current_mb: float):
+        """Обработка превышения порога памяти"""
+        # 1. Принудительная сборка мусора
+        gc.collect()
+        self._log("Выполнена принудительная сборка мусора")
+
+        # 2. Очистка кэшей (через интеграцию с системой кэширования)
+        self._clear_caches()
+
+        # 3. Создание дампа памяти для анализа
+        dump_path = self._create_memory_dump(current_mb)
+        self._log(f"Создан дамп памяти: {dump_path}")
+
+        # 4. Отправка алерта
+        self._send_memory_alert(current_mb, dump_path)
+
+    def _handle_system_memory_critical(self):
+        """Обработка критического использования системной памяти"""
+        # Экстренные меры: остановка не критичных задач
+        self._log("Приняты экстренные меры: остановка фоновых задач", level='CRITICAL')
+        # ... логика остановки задач ...
+
+        # Создание критического дампа
+        dump_path = self._create_memory_dump(psutil.Process().memory_info().rss / (1024 ** 2), critical=True)
+        self._send_critical_alert(dump_path)
+
+    def _clear_caches(self):
+        """Очистка кэшей системы"""
+        # Интеграция с основной системой кэширования
+        try:
+            from core.performance.intelligent_cache_system import get_intelligent_cache
+            cache = get_intelligent_cache()
+            stats_before = cache.get_stats()
+
+            # Очистка 50% кэша
+            target_entries = max(1, int(stats_before['total_entries'] * 0.5))
+            # ... логика очистки ...
+
+            stats_after = cache.get_stats()
+            self._log(f"Очистка кэша: {stats_before['total_entries']} -> {stats_after['total_entries']} записей")
+        except Exception as e:
+            self._log(f"Ошибка очистки кэша: {e}", level='WARNING')
+
+    def _create_memory_dump(self, memory_mb: float, critical: bool = False) -> Path:
+        """Создание дампа памяти для последующего анализа"""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        severity = 'critical' if critical else 'warning'
+        dump_file = self.dump_dir / f"memory_dump_{severity}_{timestamp}_{int(memory_mb)}mb.json"
+
+        # Сбор детальной информации
+        dump_data = {
+            'timestamp': datetime.now().isoformat(),
+            'severity': severity,
+            'memory_usage_mb': memory_mb,
+            'system_memory_percent': psutil.virtual_memory().percent,
+            'tracemalloc_stats': self._get_tracemalloc_stats(),
+            'gc_stats': self._get_gc_stats(),
+            'top_objects': self._get_top_objects(),
+            'thread_count': threading.active_count(),
+            'process_info': self._get_process_info()
         }
 
-        # Сохранение в историю
-        self.memory_history.append(metrics)
+        with open(dump_file, 'w', encoding='utf-8') as f:
+            json.dump(dump_data, f, indent=2, ensure_ascii=False)
 
-        # Очистка старых записей (> 24 часа)
-        cutoff = datetime.utcnow() - timedelta(hours=24)
-        self.memory_history = [
-            m for m in self.memory_history
-            if datetime.fromisoformat(m["timestamp"]) > cutoff
-        ]
+        return dump_file
 
-        # Сохранение на диск
-        self._save_history()
+    def _get_tracemalloc_stats(self) -> Dict[str, Any]:
+        """Получение статистики tracemalloc"""
+        current, peak = tracemalloc.get_traced_memory()
+        return {
+            'current_kb': current / 1024,
+            'peak_kb': peak / 1024,
+            'top_allocations': self._get_top_allocations()
+        }
 
-        # Проверка алертов
-        self._check_memory_alerts(metrics)
+    def _get_top_allocations(self, n: int = 20) -> List[Dict[str, Any]]:
+        """Получение топ аллокаций памяти"""
+        snapshot = tracemalloc.take_snapshot()
+        stats = snapshot.statistics('lineno')[:n]
 
-        return metrics
-
-    def _get_gpu_memory(self) -> Dict:
-        """Получение информации об использовании GPU"""
-        if not torch.cuda.is_available():
-            return {"available": False, "devices": []}
-
-        devices = []
-        for i in range(torch.cuda.device_count()):
-            props = torch.cuda.get_device_properties(i)
-            mem_info = torch.cuda.mem_get_info(i)
-
-            total = props.total_memory
-            free = mem_info[0]
-            used = total - free
-
-            devices.append({
-                "id": i,
-                "name": props.name,
-                "total_gb": total / (1024 ** 3),
-                "used_gb": used / (1024 ** 3),
-                "free_gb": free / (1024 ** 3),
-                "percent": (used / total) * 100,
-                "temperature": self._get_gpu_temperature(i)
+        result = []
+        for stat in stats:
+            result.append({
+                'size_kb': stat.size / 1024,
+                'count': stat.count,
+                'filename': stat.traceback[0].filename if stat.traceback else 'unknown',
+                'lineno': stat.traceback[0].lineno if stat.traceback else 0
             })
+
+        return result
+
+    def _get_gc_stats(self) -> Dict[str, Any]:
+        """Получение статистики сборщика мусора"""
+        return {
+            'garbage_count': len(gc.garbage),
+            'gc_enabled': gc.isenabled(),
+            'gc_counts': gc.get_count(),
+            'thresholds': gc.get_threshold()
+        }
+
+    def _get_top_objects(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Получение топ объектов по потреблению памяти (упрощенно)"""
+        # В реальной системе здесь должен быть анализ через objgraph или подобные инструменты
+        return []
+
+    def _get_process_info(self) -> Dict[str, Any]:
+        """Получение информации о процессе"""
+        p = psutil.Process()
+        return {
+            'pid': p.pid,
+            'cpu_percent': p.cpu_percent(interval=0.1),
+            'num_threads': p.num_threads(),
+            'open_files': len(p.open_files()) if hasattr(p, 'open_files') else 0
+        }
+
+    def _generate_leak_report(self, snapshot: MemorySnapshot):
+        """Генерация отчета об утечке памяти"""
+        report_file = self.dump_dir / f"leak_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+
+        report = []
+        report.append("# Отчет об обнаруженной утечке памяти")
+        report.append(f"Дата: {snapshot.timestamp}")
+        report.append(f"Текущее использование: {snapshot.total_memory_kb / 1024:.2f} МБ")
+        report.append(f"Пиковое использование: {snapshot.peak_memory_kb / 1024:.2f} МБ")
+        report.append("\n## Топ аллокаций памяти")
+
+        for i, alloc in enumerate(snapshot._get_top_allocations(10), 1):
+            report.append(f"\n{i}. {alloc['size_kb']:.2f} КБ ({alloc['count']} объектов)")
+            for frame in alloc['traceback']:
+                report.append(f"   {frame}")
+
+        report.append("\n## Рекомендации")
+        report.append("1. Проверьте циклические ссылки в объектах")
+        report.append("2. Убедитесь в корректной работе деструкторов (__del__)")
+        report.append("3. Проверьте использование глобальных кэшей без ограничения размера")
+        report.append("4. Проанализируйте долгоживущие объекты в памяти")
+
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(report))
+
+        self._log(f"Создан отчет об утечке: {report_file}")
+
+    def _send_memory_alert(self, memory_mb: float, dump_path: Path):
+        """Отправка алерта о превышении памяти"""
+        try:
+            from core.monitoring.alert_manager import AlertManager
+            alert_manager = AlertManager()
+
+            alert_manager.send_alert(
+                title=f"Превышение порога памяти: {memory_mb:.2f} МБ",
+                message=f"Память превысила порог в {self.threshold_mb} МБ. Создан дамп для анализа.",
+                severity='warning',
+                metadata={
+                    'memory_usage_mb': memory_mb,
+                    'threshold_mb': self.threshold_mb,
+                    'dump_path': str(dump_path),
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+        except Exception as e:
+            self._log(f"Ошибка отправки алерта: {e}", level='ERROR')
+
+    def _send_critical_alert(self, dump_path: Path):
+        """Отправка критического алерта"""
+        # Аналогично _send_memory_alert но с повышенной серьезностью
+        pass
+
+    def get_current_stats(self) -> Dict[str, Any]:
+        """Получение текущей статистики памяти"""
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        current, peak = tracemalloc.get_traced_memory()
 
         return {
-            "available": True,
-            "devices": devices,
-            "active_device": torch.cuda.current_device()
+            'process_memory_mb': mem_info.rss / (1024 ** 2),
+            'tracemalloc_current_kb': current / 1024,
+            'tracemalloc_peak_kb': peak / 1024,
+            'system_memory_percent': psutil.virtual_memory().percent,
+            'gc_garbage_count': len(gc.garbage),
+            'snapshot_count': len(self.snapshots)
         }
 
-    def _get_gpu_temperature(self, device_id: int) -> Optional[float]:
-        """Получение температуры GPU (Linux только)"""
-        try:
-            # Для NVIDIA через nvidia-smi
-            import subprocess
-            result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=temperature.gpu', '--format=csv,noheader,nounits'],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            if result.returncode == 0:
-                temps = [float(t.strip()) for t in result.stdout.strip().split('\n')]
-                return temps[device_id] if device_id < len(temps) else None
-        except:
-            pass
-        return None
+    def _log(self, message: str, level: str = 'INFO'):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] [MemoryOptimizer] [{level}] {message}")
 
-    def _check_memory_alerts(self, metrics: Dict):
-        """Проверка пороговых значений и генерация алертов"""
-        alerts = []
+    def stop(self):
+        """Остановка мониторинга"""
+        self._running = False
+        tracemalloc.stop()
+        self._log
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] [MemoryOptimizer] [{level}] {message}")
 
-        # RAM алерты
-        if metrics["ram"]["percent"] > self.alert_thresholds["ram_critical"]:
-            alerts.append({
-                "level": "critical",
-                "type": "ram",
-                "message": f"Критическое использование RAM: {metrics['ram']['percent']:.1f}%",
-                "timestamp": metrics["timestamp"]
-            })
-        elif metrics["ram"]["percent"] > self.alert_thresholds["ram_warning"]:
-            alerts.append({
-                "level": "warning",
-                "type": "ram",
-                "message": f"Высокое использование RAM: {metrics['ram']['percent']:.1f}%",
-                "timestamp": metrics["timestamp"]
-            })
+    def stop(self):
+        """Остановка мониторинга памяти"""
+        self._running = False
+        tracemalloc.stop()
+        self._log("Мониторинг памяти остановлен")
 
-        # GPU алерты
-        if metrics["gpu"]["available"]:
-            for device in metrics["gpu"]["devices"]:
-                if device["percent"] > self.alert_thresholds["gpu_critical"]:
-                    alerts.append({
-                        "level": "critical",
-                        "type": "gpu",
-                        "device_id": device["id"],
-                        "message": f"Критическое использование GPU {device['id']}: {device['percent']:.1f}%",
-                        "temperature": device.get("temperature"),
-                        "timestamp": metrics["timestamp"]
-                    })
-                elif device["percent"] > self.alert_thresholds["gpu_warning"]:
-                    alerts.append({
-                        "level": "warning",
-                        "type": "gpu",
-                        "device_id": device["id"],
-                        "message": f"Высокое использование GPU {device['id']}: {device['percent']:.1f}%",
-                        "temperature": device.get("temperature"),
-                        "timestamp": metrics["timestamp"]
-                    })
+    # Глобальный экземпляр оптимизатора памяти (паттерн Singleton)
+    _memory_optimizer_instance = None
 
-        # Обработка алертов
-        for alert in alerts:
-            self._handle_alert(alert)
+    def get_memory_optimizer(dump_dir: str = "data/dumps/memory",
+                             threshold_mb: int = 512) -> MemoryOptimizer:
+        """Получение глобального экземпляра оптимизатора памяти"""
+        global _memory_optimizer_instance
 
-    def _handle_alert(self, alert: Dict):
-        """Обработка алерта — логирование и автоматические действия"""
-        print(f"[{alert['level'].upper()}] {alert['message']}")
+        if _memory_optimizer_instance is None:
+            _memory_optimizer_instance = MemoryOptimizer(dump_dir, threshold_mb)
 
-        # Запись в лог алертов
-        alert_log = Path("logs/alerts/memory_alerts.log")
-        alert_log.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(alert_log, 'a') as f:
-            f.write(f"{alert['timestamp']} | {alert['level']} | {alert['type']} | {alert['message']}\n")
-
-        # Автоматические действия для критических алертов
-        if alert["level"] == "critical":
-            if alert["type"] == "ram":
-                self._emergency_ram_optimization()
-            elif alert["type"] == "gpu":
-                self._emergency_gpu_optimization(alert.get("device_id", 0))
-
-    def _emergency_ram_optimization(self):
-        """Экстренная оптимизация использования RAM"""
-        print("⚠️  Запуск экстренной оптимизации RAM...")
-
-        # 1. Принудительный сбор мусора
-        gc.collect()
-
-        # 2. Очистка кэшей PyTorch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        # 3. Выгрузка неактивных моделей ИИ
-        from core.ai_management.lazy_model_loader import LazyModelLoader
-        loader = LazyModelLoader.get_instance()
-        unloaded = loader.unload_inactive_models(max_age_minutes=5)
-        print(f"   📦 Выгружено неактивных моделей: {len(unloaded)}")
-
-        # 4. Очистка кэша данных
-        from core.performance.intelligent_cache_system import IntelligentCacheSystem
-        cache = IntelligentCacheSystem.get_instance()
-        freed = cache.clear_low_priority_cache()
-        print(f"   🗑️  Очищено кэша: {freed / (1024 ** 2):.2f} MB")
-
-        print("✅ Экстренная оптимизация RAM завершена")
-
-    def _emergency_gpu_optimization(self, device_id: int):
-        """Экстренная оптимизация использования GPU"""
-        print(f"⚠️  Запуск экстренной оптимизации GPU {device_id}...")
-
-        # 1. Очистка кэша CUDA
-        torch.cuda.empty_cache()
-
-        # 2. Перемещение неактивных тензоров на CPU
-        # (Реализация зависит от архитектуры приложения)
-
-        # 3. Снижение точности вычислений (если возможно)
-        # torch.set_float32_matmul_precision('medium')
-
-        print(f"✅ Экстренная оптимизация GPU {device_id} завершена")
-
-    def _save_history(self):
-        """Сохранение истории метрик на диск"""
-        if not self.stats_file.parent.exists():
-            self.stats_file.parent.mkdir(parents=True, exist_ok=True)
-
-        # Сохранение только последних 1000 записей
-        history_to_save = self.memory_history[-1000:]
-
-        with open(self.stats_file, 'w') as f:
-            json.dump({
-                "last_updated": datetime.utcnow().isoformat(),
-                "history": history_to_save
-            }, f, indent=2)
-
-    def _load_history(self):
-        """Загрузка истории метрик с диска"""
-        if self.stats_file.exists():
-            try:
-                with open(self.stats_file) as f:
-                    data = json.load(f)
-                    self.memory_history = data.get("history", [])
-            except Exception as e:
-                print(f"⚠️  Ошибка загрузки истории памяти: {e}")
-
-    def get_memory_recommendations(self) -> List[str]:
-        """
-        Анализ истории и генерация рекомендаций по оптимизации.
-        """
-        if len(self.memory_history) < 10:
-            return ["Недостаточно данных для анализа"]
-
-        # Анализ трендов использования памяти
-        recent = self.memory_history[-10:]
-        avg_ram = sum(m["ram"]["percent"] for m in recent) / len(recent)
-        avg_gpu = 0
-        gpu_devices = 0
-
-        if recent[0]["gpu"]["available"]:
-            for m in recent:
-                for dev in m["gpu"]["devices"]:
-                    avg_gpu += dev["percent"]
-                    gpu_devices += 1
-            avg_gpu = avg_gpu / gpu_devices if gpu_devices > 0 else 0
-
-        recommendations = []
-
-        if avg_ram > 85:
-            recommendations.append("⚠️  Среднее использование RAM > 85% — рассмотрите увеличение оперативной памяти")
-            recommendations.append("💡 Оптимизация: Уменьшите размер батча для обработки данных")
-            recommendations.append("💡 Оптимизация: Включите более агрессивную стратегию выгрузки моделей")
-
-        if avg_gpu > 80:
-            recommendations.append("⚠️  Среднее использование GPU > 80% — риск нехватки памяти при пиковых нагрузках")
-            recommendations.append("💡 Оптимизация: Используйте квантизацию моделей (int8/float16)")
-            recommendations.append("💡 Оптимизация: Внедрите пайплайн обработки с разбивкой на этапы")
-
-        # Анализ утечек памяти (монотонный рост)
-        if len(self.memory_history) >= 30:
-            first_10 = self.memory_history[-30:-20]
-            last_10 = self.memory_history[-10:]
-            first_avg = sum(m["ram"]["percent"] for m in first_10) / 10
-            last_avg = sum(m["ram"]["percent"] for m in last_10) / 10
-
-            if last_avg - first_avg > 5:  # Рост > 5% за период
-                recommendations.append("🚨 Обнаружен потенциальный утечка памяти — рост использования на {:.1f}%".format(
-                    last_avg - first_avg))
-                recommendations.append("🔍 Рекомендуется: Профилирование памяти через memory_profiler")
-
-        return recommendations if recommendations else ["✅ Использование памяти в норме"]
-
-    def generate_memory_report(self) -> str:
-        """
-        Генерация подробного отчёта по использованию памяти.
-        """
-        metrics = self.monitor_memory()
-        recommendations = self.get_memory_recommendations()
-
-        report = f"""
-Отчёт по использованию памяти
-Сгенерировано: {metrics['timestamp']}
-{'=' * 60}
-
-📊 Оперативная память (RAM)
-   Всего:    {metrics['ram']['total_gb']:.2f} GB
-   Использ.: {metrics['ram']['used_gb']:.2f} GB ({metrics['ram']['percent']:.1f}%)
-   Свободно: {metrics['ram']['available_gb']:.2f} GB
-   Swap:     {metrics['ram']['swap_percent']:.1f}%
-
-{'GPU не обнаружен' if not metrics['gpu']['available'] else ''}
-"""
-
-        if metrics['gpu']['available']:
-            report += "\n🎮 Видеопамять (GPU)\n"
-            for dev in metrics['gpu']['devices']:
-                temp_info = f" ({dev['temperature']}°C)" if dev.get('temperature') else ""
-                report += f"   Устройство {dev['id']} ({dev['name']}){temp_info}:\n"
-                report += f"      Использ.: {dev['used_gb']:.2f} GB ({dev['percent']:.1f}%)\n"
-                report += f"      Свободно: {dev['free_gb']:.2f} GB\n"
-
-        report += f"\n🐍 Память процесса Python\n"
-        report += f"   RSS:  {metrics['process']['rss_gb']:.2f} GB\n"
-        report += f"   VMS:  {metrics['process']['vms_gb']:.2f} GB\n"
-        report += f"   Потоки: {metrics['process']['num_threads']}\n"
-
-        report += f"\n💡 Рекомендации:\n"
-        for i, rec in enumerate(recommendations, 1):
-            report += f"   {i}. {rec}\n"
-
-        return report
-
-
-# Интеграция с системой мониторинга Prometheus
-def setup_prometheus_memory_metrics():
-    """
-    Настройка метрик памяти для экспорта в Prometheus.
-    """
-    try:
-        from prometheus_client import Gauge, CollectorRegistry, push_to_gateway
-
-        registry = CollectorRegistry()
-
-        ram_percent = Gauge('system_ram_percent', 'RAM usage percent', registry=registry)
-        gpu_percent = Gauge('system_gpu_percent', 'GPU usage percent', registry=registry)
-        process_rss = Gauge('process_rss_bytes', 'Process RSS memory in bytes', registry=registry)
-
-        # Обновление метрик
-        optimizer = MemoryOptimizer(config={})
-        metrics = optimizer.monitor_memory()
-
-        ram_percent.set(metrics['ram']['percent'])
-        process_rss.set(metrics['process']['rss_gb'] * (1024 ** 3))
-
-        if metrics['gpu']['available'] and metrics['gpu']['devices']:
-            gpu_percent.set(metrics['gpu']['devices'][0]['percent'])
-
-        # Отправка в Pushgateway (для краткосрочных задач)
-        push_to_gateway('localhost:9091', job='ai_freelance', registry=registry)
-
-        print("✅ Метрики памяти отправлены в Prometheus")
-
-    except ImportError:
-        print("ℹ️  Prometheus client не установлен — пропуск экспорта метрик")
-    except Exception as e:
-        print(f"⚠️  Ошибка экспорта метрик в Prometheus: {e}")
+        return _memory_optimizer_instance

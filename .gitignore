@@ -4,6 +4,22 @@
 # ОСНОВНЫЕ ИСКЛЮЧЕНИЯ
 # ==============================
 
+# Сборка и пакетирование
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# SSL keys (NEVER commit these!)
+docker/nginx/ssl/cert.pem
+docker/nginx/ssl/key.pem
+docker/nginx/ssl/dhparam.pem
+ssl/
+*.pem
+*.key
+*.crt
+*.csr
+
 # Секреты и конфиденциальные данные
 .env
 .env.local

@@ -234,12 +234,12 @@ class RollbackDeployment:
 
     def _reinstall_dependencies(self, version: str):
         """Reinstall Python dependencies for target version."""
-        req_file = self.deployments_dir / version / "requirements.txt"
+        req_file = self.deployments_dir / version / "requirements-base.txt"
         if req_file.exists():
             self.logger.info("📥 Reinstalling dependencies...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req_file)])
         else:
-            self.logger.warning("⚠️  No requirements.txt in backup – skipping dependency reinstall")
+            self.logger.warning("⚠️  No requirements-base.txt in backup – skipping dependency reinstall")
 
     def _update_current_deployment_state(self, metadata: Dict[str, Any]):
         """Update current deployment marker."""

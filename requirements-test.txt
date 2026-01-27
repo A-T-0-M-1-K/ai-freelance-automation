@@ -1,67 +1,18 @@
-# Test dependencies for AI Freelance Automation System
-# Used in CI/CD, local testing, and quality gates
-# Install with: pip install -r requirements-test.txt
+# Зависимости для тестирования
+# Использование: pip install -r requirements-test.txt
 
-# Core test frameworks
-pytest>=7.4.0
-pytest-asyncio>=0.21.1
-pytest-cov>=4.1.0              # Coverage reporting (target: >=95%)
-pytest-mock>=3.12.0            # Mocking utilities
-pytest-timeout>=2.2.0          # Prevent hanging tests
-pytest-xdist>=3.5.0            # Parallel test execution
+-r requirements-dev.txt
 
-# HTTP & API mocking
-httpx-mock>=0.10.0
-responses>=0.24.0              # For requests-based clients
-moto>=5.0.0                    # AWS service mocking (S3, SQS, etc.)
-freezegun>=1.2.2               # Time freezing for deterministic tests
+# Тестовые фреймворки
+pytest-cov>=4.1.0,<5.0.0
+pytest-mock>=3.11.0,<4.0.0
+pytest-xdist>=3.3.0,<4.0.0
+pytest-timeout>=2.1.0,<3.0.0
+httpx>=0.24.0,<0.26.0
 
-# Database & Cache mocking
-mongomock>=4.1.2               # MongoDB in-memory mock
-redislite>=6.1.0               # Embedded Redis for tests
-sqlalchemy-utils>=0.41.1       # Test helpers for SQLAlchemy
+# Фикстуры и фейковые данные
+factory-boy>=3.2.0,<4.0.0
+faker>=19.0.0,<20.0.0
 
-# AI & ML Testing
-pytest-pytorch>=0.1.0          # PyTorch-specific fixtures
-transformers-testing>=0.1.0    # Hugging Face test utils (via internal utils)
-torchtest>=0.1.0               # Custom tensor assertion helpers
-
-# Security & Cryptography Testing
-pytest-security>=0.1.0         # Custom security test markers
-cryptography-test-vectors>=0.1.0  # Known-answer tests for crypto
-
-# Platform & Browser Automation Testing
-playwright>=1.40.0
-pytest-playwright>=0.4.0       # Playwright integration for e2e tests
-selenium-wire>=5.1.0           # For proxy-based request inspection
-
-# Payment System Testing
-stripe-mock>=0.120.0           # Official Stripe API mock server (CLI)
-paypal-mock>=0.1.0             # Custom PayPal sandbox emulator
-web3-mock>=0.1.0               # Ethereum transaction mocking
-
-# Fault Injection & Chaos Engineering
-chaospy>=0.1.0                 # Simulate network failures, latency, crashes
-pytest-faulthandler>=2.0.0     # Detect segfaults and hangs
-
-# Data & State Validation
-deepdiff>=6.7.1                # Compare complex nested objects
-jsonschema>=4.20.0             # Validate config/output schemas
-factory-boy>=3.3.0             # Generate realistic test data
-
-# Performance & Load Testing
-locust>=2.19.0                 # Distributed load testing for platform scrapers
-pytest-benchmark>=4.0.0        # Microbenchmark critical paths
-
-# Self-Healing & Recovery Tests
-testcontainers>=4.0.0          # Spin up real DBs/Redis in Docker for integration tests
-docker>=7.0.0                  # Required by testcontainers
-
-# Code Quality Enforcement in CI
-bandit>=1.7.6                  # Security linter (run in CI)
-safety>=2.3.5                  # CVE scanner
-vulture>=2.11                  # Dead code detection
-
-# Utilities
-python-dotenv>=1.0.0           # Load .env.test files
-coverage>=7.3.0                # Coverage report generation
+# E2E тестирование
+playwright>=1.37.0,<2.0.0
