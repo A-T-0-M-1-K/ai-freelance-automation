@@ -5,22 +5,23 @@
 поиск заказов, принятие решений, выполнение задач, контроль качества, взаимодействие с клиентом.
 """
 
+from .saga_orchestrator import SagaOrchestrator
 from .auto_freelancer_core import AutoFreelancerCore
-from .job_analyzer import JobAnalyzer
 from .decision_engine import DecisionEngine
-from .task_orchestrator import TaskOrchestrator
+from .job_analyzer import JobAnalyzer
 from .quality_controller import QualityController
 from .reputation_manager import ReputationManager
+from .task_orchestrator import TaskOrchestrator
 
-# Публичный API модуля
+# Совместимость: старые классы остаются доступными, но рекомендуется использовать SagaOrchestrator
 __all__ = [
-    "AutoFreelancerCore",
-    "JobAnalyzer",
-    "DecisionEngine",
-    "TaskOrchestrator",
-    "QualityController",
-    "ReputationManager",
+    'SagaOrchestrator',  # Новый рекомендуемый оркестратор
+    'AutoFreelancerCore',
+    'DecisionEngine',
+    'JobAnalyzer',
+    'QualityController',
+    'ReputationManager',
+    'TaskOrchestrator'
 ]
-
 # Версия модуля (для внутреннего отслеживания)
 __version__ = "1.0.0"

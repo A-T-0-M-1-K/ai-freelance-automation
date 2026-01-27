@@ -25,6 +25,7 @@ from .config_validator import ConfigValidator
 from .env_loader import EnvLoader
 from .legacy_config_adapter import LegacyConfigAdapter
 from .config_migrator import ConfigMigrator
+from core.security.secret_vault import secret_vault
 
 logger = logging.getLogger("UnifiedConfigManager")
 
@@ -181,3 +182,53 @@ class UnifiedConfigManager:
 
     def __del__(self):
         self.shutdown()
+
+    def get_config(self, section: str) -> Dict:
+        """Получение конфигурации с автоматической подстановкой секретов"""
+        config = self._load_config_file(f"config/{section}.json")
+
+        # Автоматическая подстановка секретов для чувствительных полей
+        secret_fields = {
+            'platforms': ['api_key', 'token', 'password', 'secret'],
+            'security': ['secret_key', 'jwt_secret', 'encryption_key'],
+            'database': ['password']
+        }
+
+        if section in secret_fields:
+            for key_path in secret_fields[section]:
+                # Поиск секрета в конфиге (рекурсивно)
+                secret_value = self._find_secret_in_config(config, key_path)
+                if secret_value == '***SECRET***':
+                    # Загрузка секрета из хранилища
+                    secret_key = f"{section}_{key_path}"
+                    actual_secret = secret_vault.get_secret(secret_key)
+                    if actual_secret:
+                        self._set_secret_in_config(config, key_path, actual_secret)
+                        secret_vault.audit_access(secret_key, "config_manager", "read")
+
+        return config
+
+    def _find_secret_in_config(self, config: Dict, key_path: str) -> Optional[str]:
+        """Рекурсивный поиск секрета в конфигурации"""
+        keys = key_path.split('.')
+        current = config
+
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return None
+
+        return current if isinstance(current, str) and current == '***SECRET***' else None
+
+    def _set_secret_in_config(self, config: Dict, key_path: str, value: str):
+        """Установка секрета в конфигурацию"""
+        keys = key_path.split('.')
+        current = config
+
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+
+        current[keys[-1]] = value
