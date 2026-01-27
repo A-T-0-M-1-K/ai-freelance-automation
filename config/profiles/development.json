@@ -1,0 +1,126 @@
+{
+  "$schema": "../schemas/config_schema_v1.json",
+  "profile_name": "development",
+  "version": "1.0.0",
+  "environment": "development",
+  "debug_mode": true,
+  "log_level": "DEBUG",
+  "enable_telemetry": false,
+  "auto_update_check": false,
+
+  "core": {
+    "heartbeat_interval_sec": 5,
+    "emergency_recovery_enabled": true,
+    "self_healing_max_attempts": 3,
+    "component_startup_timeout_sec": 30
+  },
+
+  "ai_engine": {
+    "model_provider": "local",
+    "fallback_to_openai": true,
+    "transcription_model": "whisper-large-v3",
+    "translation_model": "nllb-200-distilled-1.3B",
+    "copywriting_model": "llama3-8b-instruct",
+    "inference_device": "auto",
+    "max_concurrent_inferences": 4,
+    "enable_continuous_learning": true,
+    "learning_data_retention_days": 7
+  },
+
+  "automation": {
+    "job_scan_interval_min": 2,
+    "max_concurrent_jobs": 5,
+    "auto_bid_enabled": true,
+    "risk_tolerance": "medium",
+    "quality_threshold": 0.92,
+    "simulate_client_communication": true
+  },
+
+  "platforms": {
+    "enabled": ["upwork", "freelance_ru", "kwork"],
+    "upwork": {
+      "api_key_ref": "vault:upwork_api_key_dev",
+      "rate_limit_delay_sec": 1
+    },
+    "freelance_ru": {
+      "use_parsing_fallback": true,
+      "session_refresh_min": 10
+    },
+    "kwork": {
+      "auto_gig_update": false
+    }
+  },
+
+  "communication": {
+    "default_language": "ru",
+    "supported_languages": ["ru", "en", "es", "de", "fr"],
+    "sentiment_analysis_enabled": true,
+    "response_delay_sec": [0, 2],
+    "emotional_intelligence_level": "adaptive"
+  },
+
+  "payment": {
+    "enabled_providers": ["stripe_test", "paypal_sandbox", "yoomoney_test"],
+    "auto_invoice_on_delivery": true,
+    "tax_calculation_enabled": false,
+    "fraud_detection_sensitivity": "low"
+  },
+
+  "security": {
+    "encryption_enabled": true,
+    "key_rotation_days": 90,
+    "store_keys_in_hsm": false,
+    "audit_log_retention_days": 30,
+    "anomaly_detection_enabled": true
+  },
+
+  "monitoring": {
+    "metrics_collection_enabled": true,
+    "metrics_export_interval_sec": 10,
+    "alert_on_cpu_over_percent": 90,
+    "alert_on_memory_over_percent": 85,
+    "predictive_analytics_enabled": false,
+    "health_check_endpoints": [
+      "http://localhost:8080/health"
+    ]
+  },
+
+  "storage": {
+    "workspace_dir": "./workspace/dev",
+    "cache_dir": "./cache/dev",
+    "logs_dir": "./logs/dev",
+    "backup_enabled": false,
+    "autosave_interval_sec": 60
+  },
+
+  "scaling": {
+    "auto_scale_enabled": false,
+    "min_workers": 1,
+    "max_workers": 2,
+    "scale_up_threshold_cpu_percent": 70
+  },
+
+  "plugins": {
+    "hot_reload_enabled": true,
+    "plugin_dir": "./plugins",
+    "sandbox_execution": true
+  },
+
+  "ui": {
+    "web_interface_enabled": true,
+    "host": "127.0.0.1",
+    "port": 8080,
+    "auth_required": false,
+    "theme": "dark"
+  },
+
+  "vault": {
+    "path": "../secrets/vault_dev.enc",
+    "key_derivation": {
+      "algorithm": "argon2id",
+      "time_cost": 2,
+      "memory_cost_kb": 65536,
+      "parallelism": 1
+    }
+  }
+}

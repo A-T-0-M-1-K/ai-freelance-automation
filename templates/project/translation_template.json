@@ -1,0 +1,123 @@
+{
+  "$schema": "https://ai-freelance-automation.example.com/schemas/translation_template.schema.json",
+  "template_version": "1.2.0",
+  "template_type": "translation",
+  "metadata": {
+    "name": "Professional Translation Project Template",
+    "description": "Standard template for multilingual translation tasks with quality control and client communication steps.",
+    "author": "AI Freelance Automation System",
+    "created_at": "2026-01-26T00:00:00Z",
+    "tags": ["translation", "multilingual", "professional", "autonomous"]
+  },
+  "source": {
+    "language": "{{source_language}}",
+    "format": "{{source_format}}",
+    "encoding": "utf-8",
+    "word_count_estimate": "{{word_count}}"
+  },
+  "target": {
+    "language": "{{target_language}}",
+    "format": "{{target_format}}",
+    "style_guide": "{{style_guide_url}}",
+    "glossary_terms": "{{glossary_terms_file_path}}",
+    "preserve_formatting": true,
+    "include_comments": false
+  },
+  "quality_requirements": {
+    "accuracy_level": "professional",
+    "fluency_score_min": 0.95,
+    "terminology_consistency": true,
+    "cultural_adaptation": true,
+    "review_passes": 2,
+    "ai_model_fallback": ["nllb-200", "google-translate-api", "deep-translator"]
+  },
+  "workflow": {
+    "steps": [
+      {
+        "step_id": "analyze_source",
+        "name": "Source Analysis",
+        "service": "ai_services.translation_service",
+        "method": "analyze_document",
+        "params": {
+          "detect_language": true,
+          "estimate_complexity": true,
+          "extract_glossary_candidates": true
+        }
+      },
+      {
+        "step_id": "translate_content",
+        "name": "Primary Translation",
+        "service": "ai_services.translation_service",
+        "method": "translate_with_context",
+        "params": {
+          "use_glossary": true,
+          "apply_style_guide": true,
+          "preserve_placeholders": true
+        }
+      },
+      {
+        "step_id": "post_edit",
+        "name": "Post-Editing & Fluency Refinement",
+        "service": "ai_services.editing_service",
+        "method": "refine_fluency",
+        "params": {
+          "target_language": "{{target_language}}",
+          "formality_level": "{{formality_level}}"
+        }
+      },
+      {
+        "step_id": "quality_check",
+        "name": "Automated Quality Assurance",
+        "service": "ai_services.proofreading_service",
+        "method": "run_full_check",
+        "params": {
+          "check_grammar": true,
+          "check_consistency": true,
+          "check_terminology": true
+        }
+      },
+      {
+        "step_id": "client_review_prep",
+        "name": "Prepare Delivery Package",
+        "service": "core.automation.task_orchestrator",
+        "method": "package_deliverables",
+        "params": {
+          "include_metadata": true,
+          "generate_report": true,
+          "format_for_platform": "{{platform_name}}"
+        }
+      }
+    ]
+  },
+  "communication_plan": {
+    "initial_message": "templates/response/greeting.txt",
+    "progress_update": "templates/response/followup.txt",
+    "delivery_message": "templates/response/delivery.txt",
+    "revision_request_handling": "auto_negotiate_with_context"
+  },
+  "pricing": {
+    "model": "per_word",
+    "rate_per_unit": "{{rate_per_word}}",
+    "minimum_charge": 10.0,
+    "rush_multiplier": 1.5,
+    "currency": "USD"
+  },
+  "sla": {
+    "max_turnaround_hours": "{{max_turnaround_hours}}",
+    "revision_window_hours": 72,
+    "support_response_time_minutes": 30
+  },
+  "placeholders": {
+    "source_language": "en",
+    "target_language": "ru",
+    "source_format": "plain_text",
+    "target_format": "same_as_source",
+    "word_count": 500,
+    "style_guide_url": "",
+    "glossary_terms_file_path": "",
+    "formality_level": "neutral",
+    "rate_per_word": 0.08,
+    "max_turnaround_hours": 48,
+    "platform_name": "upwork"
+  }
+}

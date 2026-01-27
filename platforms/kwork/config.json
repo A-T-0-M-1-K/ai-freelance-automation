@@ -1,0 +1,77 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/platform-config.json",
+  "platform": {
+    "name": "kwork",
+    "enabled": true,
+    "version": "2.4.1",
+    "type": "freelance_marketplace",
+    "region": "ru",
+    "supports_api": false,
+    "requires_browser_automation": true,
+    "rate_limits": {
+      "requests_per_minute": 15,
+      "jobs_scrape_per_hour": 120,
+      "bids_per_day": 30
+    }
+  },
+  "authentication": {
+    "method": "session_cookies_encrypted",
+    "session_key_ref": "vault:kwork/session/cookies",
+    "login_url": "https://kwork.ru/login",
+    "auto_relogin": true,
+    "captcha_solver": "2captcha",
+    "captcha_solver_key_ref": "vault:external/2captcha/api_key"
+  },
+  "job_filters": {
+    "categories": [
+      "transcription",
+      "translation",
+      "copywriting",
+      "editing",
+      "proofreading"
+    ],
+    "min_budget_rub": 300,
+    "max_competition_level": "medium",
+    "exclude_keywords": ["срочн", "срочно", "дешев", "дёшев", "менее 24 часов", "без оплаты"],
+    "require_fixed_price": true,
+    "auto_skip_if_client_rating_below": 4.0
+  },
+  "bid_automation": {
+    "enabled": true,
+    "template_strategy": "dynamic_ai",
+    "price_multiplier": 1.15,
+    "delivery_time_hours": {
+      "transcription": 24,
+      "translation": 48,
+      "copywriting": 36,
+      "editing": 24,
+      "proofreading": 12
+    },
+    "custom_proposal_length_min": 180,
+    "custom_proposal_length_max": 400,
+    "avoid_generic_phrases": true
+  },
+  "communication": {
+    "auto_respond_to_messages": true,
+    "response_delay_seconds_min": 120,
+    "response_delay_seconds_max": 900,
+    "use_emotional_intelligence": true,
+    "multilingual_support": ["ru", "en", "uk", "be"]
+  },
+  "monitoring": {
+    "log_level": "INFO",
+    "track_job_views": true,
+    "track_bid_success_rate": true,
+    "alert_on_account_suspicion": true
+  },
+  "compliance": {
+    "gdpr_compliant": false,
+    "local_law_compliance": "russian_federation",
+    "data_retention_days": 90
+  },
+  "meta": {
+    "last_updated": "2026-01-26T00:00:00Z",
+    "author": "AI Freelance Automation System",
+    "description": "Configuration for autonomous operation on Kwork.ru platform"
+  }
+}

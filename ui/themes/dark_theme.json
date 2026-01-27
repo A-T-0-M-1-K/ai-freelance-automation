@@ -1,0 +1,80 @@
+{
+  "theme_name": "Dark Theme",
+  "theme_id": "dark_theme",
+  "version": "1.0.0",
+  "author": "AI Freelance Automation System",
+  "description": "Professional dark theme optimized for long-term autonomous operation monitoring and reduced eye strain.",
+  "colors": {
+    "background": "#121212",
+    "surface": "#1e1e1e",
+    "primary": "#BB86FC",
+    "primary_variant": "#3700B3",
+    "secondary": "#03DAC6",
+    "secondary_variant": "#018786",
+    "error": "#CF6679",
+    "warning": "#FF9800",
+    "success": "#4CAF50",
+    "info": "#2196F3",
+    "text_primary": "#E0E0E0",
+    "text_secondary": "#B0B0B0",
+    "text_disabled": "#616161",
+    "border": "#333333",
+    "divider": "#2A2A2A"
+  },
+  "typography": {
+    "font_family": "Inter, Roboto, 'Segoe UI', sans-serif",
+    "font_size_base": "14px",
+    "line_height": "1.5",
+    "heading_font_weight": "600",
+    "body_font_weight": "400"
+  },
+  "spacing": {
+    "unit": "8px",
+    "padding_small": "8px",
+    "padding_medium": "16px",
+    "padding_large": "24px",
+    "margin_small": "8px",
+    "margin_medium": "16px",
+    "margin_large": "24px"
+  },
+  "components": {
+    "button": {
+      "border_radius": "6px",
+      "padding": "10px 16px",
+      "font_weight": "500"
+    },
+    "card": {
+      "background": "#252525",
+      "border_radius": "12px",
+      "box_shadow": "0 4px 12px rgba(0, 0, 0, 0.3)",
+      "padding": "16px"
+    },
+    "input": {
+      "background": "#2d2d2d",
+      "border": "1px solid #333333",
+      "border_radius": "6px",
+      "color": "#E0E0E0",
+      "padding": "10px 12px"
+    },
+    "sidebar": {
+      "background": "#1a1a1a",
+      "width": "260px"
+    },
+    "header": {
+      "background": "#1a1a1a",
+      "height": "60px",
+      "border_bottom": "1px solid #2A2A2A"
+    }
+  },
+  "accessibility": {
+    "high_contrast_mode": false,
+    "prefers_reduced_motion": false,
+    "supports_screen_reader": true
+  },
+  "metadata": {
+    "created_at": "2026-01-26T00:00:00Z",
+    "last_updated": "2026-01-26T00:00:00Z",
+    "compatible_ui_version": ">=2.0.0",
+    "tags": ["dark", "professional", "default", "system"]
+  }
+}

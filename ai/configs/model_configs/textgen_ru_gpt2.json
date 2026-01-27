@@ -1,0 +1,73 @@
+{
+  "model_id": "textgen_ru_gpt2",
+  "version": "1.4.2",
+  "description": "Русскоязычная GPT-2 модель для генерации текста: копирайтинг, ответы клиентам, черновики, рерайт.",
+  "type": "text_generation",
+  "language": "ru",
+  "supported_tasks": [
+    "copywriting",
+    "client_communication",
+    "drafting",
+    "rewriting",
+    "proofreading"
+  ],
+  "source": {
+    "provider": "huggingface",
+    "model_name": "sberbank-ai/rugpt2large",
+    "revision": "main",
+    "license": "MIT",
+    "requires_auth": false
+  },
+  "hardware_requirements": {
+    "min_vram_gb": 6,
+    "recommended_vram_gb": 10,
+    "supports_cpu_fallback": true,
+    "quantization_supported": ["int8", "float16"]
+  },
+  "inference": {
+    "default_max_length": 512,
+    "max_new_tokens": 300,
+    "temperature_range": [0.3, 1.2],
+    "default_temperature": 0.7,
+    "top_p": 0.92,
+    "repetition_penalty": 1.15,
+    "do_sample": true,
+    "num_beams": 1,
+    "early_stopping": false
+  },
+  "optimization": {
+    "enable_cache": true,
+    "use_flash_attention": false,
+    "torch_compile": false,
+    "onnx_export_available": true,
+    "onnx_path": "ai/models/onnx/textgen_ru_gpt2.onnx"
+  },
+  "safety": {
+    "content_filter_enabled": true,
+    "pii_detection": true,
+    "toxicity_threshold": 0.85,
+    "blocklist_categories": ["hate", "violence", "nsfw", "spam"]
+  },
+  "performance_profile": {
+    "tokens_per_second_cpu": 12,
+    "tokens_per_second_gpu": 85,
+    "cold_start_ms": 3200,
+    "warm_start_ms": 450
+  },
+  "lifecycle": {
+    "auto_update_check_days": 30,
+    "deprecation_warning_days": 60,
+    "eol_date": null,
+    "replacement_model": null
+  },
+  "logging": {
+    "log_inputs": false,
+    "log_outputs": false,
+    "log_prompts_for_learning": true,
+    "anonymize_logs": true
+  },
+  "validation": {
+    "schema_version": "ai-model-config-v2.1",
+    "checksum": "sha256:8a3d7f1e2c4b5a6d9e0f1c2b3a4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3"
+  }
+}

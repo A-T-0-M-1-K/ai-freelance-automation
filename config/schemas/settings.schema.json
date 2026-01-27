@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/settings.schema.json",
+  "title": "AI Freelance Automation System Configuration",
+  "description": "Master configuration schema for the fully autonomous AI freelancer system.",
+  "type": "object",
+  "properties": {
+    "system": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "default": "AI_FREELANCE_AUTOMATION" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$" },
+        "environment": { "type": "string", "enum": ["development", "staging", "production"], "default": "production" },
+        "log_level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], "default": "INFO" },
+        "data_dir": { "type": "string", "format": "path", "default": "./data" },
+        "temp_dir": { "type": "string", "format": "path", "default": "./temp" },
+        "cache_dir": { "type": "string", "format": "path", "default": "./cache" }
+      },
+      "required": ["name", "version", "environment"],
+      "additionalProperties": false
+    },
+
+    "security": {
+      "type": "object",
+      "properties": {
+        "encryption": {
+          "type": "object",
+          "properties": {
+            "master_key_path": { "type": "string", "format": "path" },
+            "key_rotation_days": { "type": "integer", "minimum": 1, "maximum": 365, "default": 90 },
+            "use_hsm": { "type": "boolean", "default": false }
+          },
+          "required": ["master_key_path"],
+          "additionalProperties": false
+        },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "jwt_secret": { "type": "string", "minLength": 32 },
+            "session_timeout_minutes": { "type": "integer", "minimum": 1, "default": 60 }
+          },
+          "required": ["jwt_secret"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["encryption", "auth"],
+      "additionalProperties": false
+    },
+
+    "ai": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "enum": ["openai", "anthropic", "google", "local"] },
+              "api_key": { "type": "string" },
+              "model_map": {
+                "type": "object",
+                "properties": {
+                  "transcription": { "type": "string" },
+                  "translation": { "type": "string" },
+                  "copywriting": { "type": "string" },
+                  "reasoning": { "type": "string" }
+                },
+                "required": ["reasoning"]
+              },
+              "enabled": { "type": "boolean", "default": true }
+            },
+            "required": ["name", "api_key", "model_map"],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "fallback_strategy": { "type": "string", "enum": ["round_robin", "quality_priority", "cost_priority"], "default": "quality_priority" },
+        "max_concurrent_tasks": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+      },
+      "required": ["providers"],
+      "additionalProperties": false
+    },
+
+    "platforms": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["upwork", "freelancer", "fiverr", "kwork", "custom"] },
+          "minItems": 1
+        },
+        "upwork": {
+          "type": "object",
+          "properties": {
+            "client_id": { "type": "string" },
+            "client_secret": { "type": "string" },
+            "refresh_token": { "type": "string" },
+            "polling_interval_seconds": { "type": "integer", "minimum": 60, "default": 300 }
+          },
+          "required": ["client_id", "client_secret", "refresh_token"]
+        },
+        "fiverr": {
+          "type": "object",
+          "properties": {
+            "access_token": { "type": "string" },
+            "gig_ids": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["access_token"]
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": true
+    },
+
+    "payment": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["stripe", "paypal", "yoomoney", "crypto", "bank_transfer"] }
+        },
+        "auto_invoice": { "type": "boolean", "default": true },
+        "tax_rate_percent": { "type": "number", "minimum": 0, "maximum": 100, "default": 0 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "default": "USD" }
+      },
+      "required": ["providers"],
+      "additionalProperties": false
+    },
+
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "enable_prometheus": { "type": "boolean", "default": true },
+        "grafana_url": { "type": "string", "format": "uri" },
+        "alert_webhook": { "type": "string", "format": "uri" },
+        "metrics_retention_days": { "type": "integer", "minimum": 1, "default": 30 }
+      },
+      "additionalProperties": false
+    },
+
+    "communication": {
+      "type": "object",
+      "properties": {
+        "default_language": { "type": "string", "pattern": "^[a-z]{2}$", "default": "en" },
+        "supported_languages": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z]{2}(_[A-Z]{2})?$" },
+          "minItems": 1,
+          "default": ["en", "ru", "es", "fr", "de"]
+        },
+        "response_delay_seconds": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "integer", "minimum": 0, "default": 30 },
+            "max": { "type": "integer", "minimum": 1, "default": 300 }
+          },
+          "required": ["min", "max"]
+        }
+      },
+      "required": ["default_language", "supported_languages"],
+      "additionalProperties": false
+    },
+
+    "autonomy": {
+      "type": "object",
+      "properties": {
+        "max_active_jobs": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+        "auto_accept_threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.75 },
+        "self_healing_enabled": { "type": "boolean", "default": true },
+        "auto_update_models": { "type": "boolean", "default": true }
+      },
+      "required": ["max_active_jobs", "auto_accept_threshold"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "system",
+    "security",
+    "ai",
+    "platforms",
+    "payment",
+    "communication",
+    "autonomy"
+  ],
+  "additionalProperties": false
+}

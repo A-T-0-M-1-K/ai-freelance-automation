@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/notifications.schema.json",
+  "title": "Notification System Configuration Schema",
+  "description": "Schema for configuring multi-channel notification system with fallbacks, templates, and security controls.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Globally enable or disable all notifications.",
+      "default": true
+    },
+    "default_channels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["email", "push", "sms", "webhook", "desktop", "mobile_app", "telegram", "discord", "slack"]
+      },
+      "description": "Default channels used when no specific channel is specified.",
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "priority_levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(CRITICAL|HIGH|MEDIUM|LOW|DEBUG)$": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            },
+            "rate_limit_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum interval between notifications of this priority (anti-spam)."
+            },
+            "require_acknowledgment": {
+              "type": "boolean",
+              "description": "Whether human or AI must acknowledge the alert."
+            }
+          },
+          "required": ["channels", "rate_limit_seconds", "require_acknowledgment"],
+          "additionalProperties": false
+        }
+      },
+      "description": "Defines behavior per priority level."
+    },
+    "templates": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_]+$": {
+          "type": "object",
+          "properties": {
+            "subject": { "type": "string" },
+            "body_text": { "type": "string" },
+            "body_html": { "type": "string" },
+            "variables": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "List of expected template variables (e.g., client_name, job_id)."
+            }
+          },
+          "required": ["subject", "body_text", "variables"],
+          "additionalProperties": false
+        }
+      },
+      "description": "Named notification templates with variable placeholders."
+    },
+    "channels": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "$ref": "#/$defs/email_config"
+        },
+        "push": {
+          "$ref": "#/$defs/push_config"
+        },
+        "sms": {
+          "$ref": "#/$defs/sms_config"
+        },
+        "webhook": {
+          "$ref": "#/$defs/webhook_config"
+        },
+        "telegram": {
+          "$ref": "#/$defs/telegram_config"
+        },
+        "discord": {
+          "$ref": "#/$defs/discord_config"
+        },
+        "slack": {
+          "$ref": "#/$defs/slack_config"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-channel configuration blocks."
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "encrypt_sensitive_notifications": {
+          "type": "boolean",
+          "default": true
+        },
+        "allowed_notification_domains": {
+          "type": "array",
+          "items": { "type": "string", "format": "hostname" },
+          "description": "Whitelist of domains allowed in notification links (prevents SSRF/phishing)."
+        },
+        "mask_pii_in_logs": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "fallback_chain": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["email", "push", "sms", "webhook", "telegram", "discord", "slack"]
+      },
+      "description": "Ordered list of fallback channels if primary fails.",
+      "minItems": 1
+    }
+  },
+  "required": [
+    "enabled",
+    "default_channels",
+    "priority_levels",
+    "templates",
+    "channels",
+    "security",
+    "fallback_chain"
+  ],
+  "$defs": {
+    "email_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "provider": { "type": "string", "enum": ["smtp", "sendgrid", "mailgun", "ses"] },
+        "from_address": { "type": "string", "format": "email" },
+        "use_tls": { "type": "boolean", "default": true },
+        "max_retries": { "type": "integer", "minimum": 0, "maximum": 5 }
+      },
+      "required": ["enabled", "provider", "from_address"],
+      "additionalProperties": true
+    },
+    "push_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "service_worker_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["enabled"]
+    },
+    "sms_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "provider": { "type": "string", "enum": ["twilio", "vonage", "custom"] },
+        "sender_id": { "type": "string" }
+      },
+      "required": ["enabled", "provider"]
+    },
+    "webhook_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "url": { "type": "string", "format": "uri" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 30 }
+      },
+      "required": ["enabled", "url"]
+    },
+    "telegram_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "bot_token_ref": { "type": "string", "description": "Reference to encrypted secret (e.g., 'secrets.telegram_bot_token')" },
+        "chat_id": { "type": "string" }
+      },
+      "required": ["enabled", "bot_token_ref"]
+    },
+    "discord_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "webhook_url_ref": { "type": "string" }
+      },
+      "required": ["enabled", "webhook_url_ref"]
+    },
+    "slack_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "bot_token_ref": { "type": "string" },
+        "channel": { "type": "string" }
+      },
+      "required": ["enabled", "bot_token_ref", "channel"]
+    }
+  }
+}

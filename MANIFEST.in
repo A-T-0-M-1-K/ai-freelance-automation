@@ -1,0 +1,51 @@
+# MANIFEST.in — Controls non-Python files included in source distribution
+# Ensures full functionality, auditability, and self-healing capabilities are preserved
+
+# Core system assets
+include core/config/schemas/*.json
+include core/config/templates/*.yaml
+include core/security/crypto_templates/*.template
+include core/monitoring/alert_rules/*.yml
+
+# Documentation (critical for self-repair & compliance)
+recursive-include docs *.md *.rst *.pdf *.txt
+include README.md
+include SECURITY.md
+include PRIVACY_POLICY.md
+include COMPLIANCE/GDPR.md
+include COMPLIANCE/PCI_DSS.md
+include COMPLIANCE/HIPAA.md
+
+# Plugin system (hot-swap capability)
+recursive-include plugins *.py *.json *.yaml *.toml
+include plugins/README_PLUGIN_SYSTEM.md
+
+# AI model metadata & configs (not weights — those are loaded dynamically)
+recursive-include ai/models/metadata *.json *.yaml
+recursive-include ai/prompts *.txt *.j2
+
+# Logging & auditing templates
+include logs/config/*.conf
+include logs/rotation/*.cfg
+
+# Legal & licensing
+include LICENSE
+include NOTICE
+include THIRD_PARTY_LICENSES.txt
+
+# Example configurations (for first-run setup)
+include examples/configs/*.yaml
+include examples/plugins/*.py
+
+# UI assets (if any static files exist)
+recursive-include ui/static *.*
+recursive-include ui/templates *.html *.jinja
+
+# Exclude unnecessary files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude *.swp
+global-exclude .gitignore
+global-exclude .env
+global-exclude secrets/*

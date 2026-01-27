@@ -1,0 +1,86 @@
+{
+  "$schema": "https://ai-freelance-automation.com/schemas/database/v1.json",
+  "version": "1.0",
+  "metadata": {
+    "description": "Database configuration for AI Freelance Automation System",
+    "encrypted_fields": ["primary.postgres.password", "analytics.mongodb.password", "cache.redis.password"],
+    "last_updated": "2026-01-25T00:00:00Z",
+    "environment": "${ENV:ENVIRONMENT|production}"
+  },
+  "primary": {
+    "postgres": {
+      "enabled": true,
+      "host": "${ENV:DB_POSTGRES_HOST|localhost}",
+      "port": 5432,
+      "database": "ai_freelance_core",
+      "username": "ai_core_user",
+      "password": "encrypted:AES256GCM:base64:U2FsdGVkX1+abc123...",
+      "ssl_mode": "require",
+      "pool_size": 20,
+      "max_overflow": 30,
+      "timeout": 30,
+      "retry_attempts": 3,
+      "backup_enabled": true,
+      "backup_schedule": "0 2 * * *"
+    }
+  },
+  "analytics": {
+    "mongodb": {
+      "enabled": true,
+      "connection_string": "mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}:27017",
+      "database": "ai_analytics",
+      "options": {
+        "retryWrites": true,
+        "w": "majority",
+        "readPreference": "secondaryPreferred"
+      },
+      "password": "encrypted:AES256GCM:base64:XyZ987def456...",
+      "encryption_key_id": "analytics-db-key-v1"
+    }
+  },
+  "cache": {
+    "redis": {
+      "enabled": true,
+      "host": "${ENV:REDIS_HOST|localhost}",
+      "port": 6379,
+      "db": 0,
+      "password": "encrypted:AES256GCM:base64:RedisEncryptedPass789...",
+      "ssl": true,
+      "timeout": 5,
+      "max_connections": 100,
+      "ttl_default": 3600,
+      "ttl_ai_results": 86400
+    }
+  },
+  "logging": {
+    "timescaledb": {
+      "enabled": false,
+      "host": "logs.ai-freelance.local",
+      "port": 5432,
+      "database": "system_logs",
+      "username": "log_writer",
+      "password": "encrypted:AES256GCM:base64:LogDbPassEnc..."
+    }
+  },
+  "security": {
+    "encryption_required": true,
+    "key_rotation_days": 90,
+    "audit_trail_enabled": true,
+    "pii_masking_enabled": true
+  },
+  "failover": {
+    "enabled": true,
+    "read_replicas": [
+      {
+        "name": "replica-eu",
+        "host": "postgres-replica-eu.ai-freelance.net",
+        "priority": 1
+      },
+      {
+        "name": "replica-us",
+        "host": "postgres-replica-us.ai-freelance.net",
+        "priority": 2
+      }
+    ]
+  }
+}

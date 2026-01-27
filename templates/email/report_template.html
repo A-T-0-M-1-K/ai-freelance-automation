@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 700px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #4a6cf7, #2d3748);
+            color: white;
+            padding: 24px 32px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 32px;
+        }
+        .section {
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #2d3748;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 12px;
+        }
+        .metric-card {
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #4a6cf7;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+        }
+        .job-list {
+            list-style: none;
+            padding: 0;
+        }
+        .job-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #edf2f7;
+        }
+        .job-item:last-child {
+            border-bottom: none;
+        }
+        .job-title {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .job-meta {
+            font-size: 13px;
+            color: #718096;
+            margin-top: 4px;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 16px 32px;
+            text-align: center;
+            font-size: 12px;
+            color: #718096;
+            border-top: 1px solid #e2e8f0;
+        }
+        .disclaimer {
+            margin-top: 8px;
+            font-style: italic;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+            .content {
+                padding: 20px;
+            }
+            .header {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ report_title }}</h1>
+        </div>
+        <div class="content">
+            <p>Hello,</p>
+            <p>This is your automated performance and activity report from your AI Freelancer Assistant.</p>
+
+            <div class="section">
+                <h2>📊 Summary Metrics</h2>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">{{ total_jobs }}</div>
+                        <div class="metric-label">Jobs Processed</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ completed_jobs }}</div>
+                        <div class="metric-label">Completed</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ revenue|default('0.00') }} {{ currency|default('USD') }}</div>
+                        <div class="metric-label">Revenue</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ avg_rating|default('N/A') }}</div>
+                        <div class="metric-label">Avg. Rating</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if recent_jobs %}
+            <div class="section">
+                <h2>🆕 Recent Jobs</h2>
+                <ul class="job-list">
+                    {% for job in recent_jobs %}
+                    <li class="job-item">
+                        <div class="job-title">{{ job.title }}</div>
+                        <div class="job-meta">
+                            Platform: {{ job.platform }} • Status: {{ job.status }} • Completed: {{ job.completed_at }}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if anomalies_detected %}
+            <div class="section">
+                <h2>⚠️ System Alerts</h2>
+                <ul>
+                    {% for alert in anomalies_detected %}
+                    <li>{{ alert.message }} (Severity: {{ alert.severity }})</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="section">
+                <h2>📈 Next Steps</h2>
+                <p>The system is operating autonomously. No action is required unless you wish to adjust settings or review strategy.</p>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Generated automatically by AI Freelance Automation System</p>
+            <p class="disclaimer">This report was created on {{ generated_at }}. All data is securely logged and encrypted.</p>
+        </div>
+    </div>
+</body>
+</html>

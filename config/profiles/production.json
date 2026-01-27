@@ -1,0 +1,167 @@
+{
+  "profile": "production",
+  "version": "1.0.0",
+  "environment": {
+    "name": "production",
+    "debug": false,
+    "log_level": "INFO",
+    "timezone": "UTC"
+  },
+  "system": {
+    "autonomous_mode": true,
+    "max_concurrent_jobs": 50,
+    "max_concurrent_clients": 100,
+    "job_scan_interval_seconds": 300,
+    "emergency_recovery_enabled": true,
+    "self_healing_threshold": 0.95,
+    "uptime_target_percent": 99.9
+  },
+  "ai": {
+    "models": {
+      "transcription": {
+        "provider": "openai",
+        "model": "whisper-1",
+        "fallback": ["local/whisper-large-v3"]
+      },
+      "translation": {
+        "provider": "google",
+        "model": "translate-v2",
+        "fallback": ["openai/gpt-4o", "local/nllb-200"]
+      },
+      "copywriting": {
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet",
+        "fallback": ["openai/gpt-4o", "local/llama-3-70b"]
+      },
+      "proofreading": {
+        "provider": "custom",
+        "model": "proofread-pro-v2",
+        "fallback": ["openai/gpt-4o"]
+      }
+    },
+    "continuous_learning": {
+      "enabled": true,
+      "feedback_loop": true,
+      "retrain_interval_hours": 24,
+      "quality_threshold": 0.98
+    },
+    "inference": {
+      "timeout_seconds": 120,
+      "retry_attempts": 3,
+      "use_gpu_if_available": true,
+      "cache_results": true
+    }
+  },
+  "platforms": {
+    "enabled": ["upwork", "fiverr", "freelance_ru", "kwork"],
+    "upwork": {
+      "api_key_ref": "vault:upwork_api_key",
+      "secret_ref": "vault:upwork_secret",
+      "auto_bid": true,
+      "min_budget_usd": 20,
+      "max_competition_ratio": 0.7
+    },
+    "fiverr": {
+      "gig_ids": ["GIG_001", "GIG_002"],
+      "auto_response": true,
+      "price_strategy": "dynamic"
+    },
+    "freelance_ru": {
+      "parser_delay_ms": 1500,
+      "use_proxy_pool": true
+    },
+    "kwork": {
+      "auto_accept_orders": true,
+      "min_rating": 4.5
+    }
+  },
+  "communication": {
+    "languages_supported": [
+      "en", "ru", "es", "fr", "de", "pt", "it", "zh", "ja", "ar"
+    ],
+    "sentiment_analysis": true,
+    "response_time_max_minutes": 15,
+    "tone_presets": {
+      "default": "professional",
+      "client_preference": "adaptive"
+    },
+    "dialogue_context_window": 10
+  },
+  "payment": {
+    "providers": ["stripe", "paypal", "yoomoney", "crypto", "bank_transfer"],
+    "auto_invoice": true,
+    "reminder_schedule_hours": [24, 48, 72],
+    "fraud_detection": {
+      "enabled": true,
+      "sensitivity": "high"
+    },
+    "tax": {
+      "auto_calculate": true,
+      "jurisdiction": "EU_VAT",
+      "reporting_enabled": true
+    }
+  },
+  "security": {
+    "encryption": {
+      "data_at_rest": "AES-256-GCM",
+      "data_in_transit": "TLS_1_3",
+      "key_rotation_days": 90
+    },
+    "auth": {
+      "session_timeout_minutes": 30,
+      "mfa_required": true
+    },
+    "compliance": {
+      "gdpr": true,
+      "pci_dss": true,
+      "hipaa": false,
+      "soc2": true
+    },
+    "anomaly_detection": {
+      "enabled": true,
+      "model": "ml-anomaly-v1"
+    }
+  },
+  "monitoring": {
+    "metrics": {
+      "system": true,
+      "business": true,
+      "ai_quality": true,
+      "client_satisfaction": true
+    },
+    "alerting": {
+      "channels": ["email", "slack", "pagerduty"],
+      "critical_alerts_enabled": true
+    },
+    "reporting": {
+      "daily": true,
+      "weekly": true,
+      "monthly": true
+    }
+  },
+  "scaling": {
+    "auto_scale": true,
+    "min_workers": 4,
+    "max_workers": 32,
+    "scale_up_cpu_threshold": 75,
+    "scale_down_cpu_threshold": 30,
+    "gpu_scaling_enabled": true
+  },
+  "storage": {
+    "cache_backend": "redis",
+    "file_storage": "aws_s3",
+    "database": "postgresql",
+    "backup_frequency_hours": 6
+  },
+  "logging": {
+    "structured": true,
+    "retention_days": 90,
+    "audit_log_enabled": true,
+    "sensitive_data_masked": true
+  },
+  "plugins": {
+    "hot_reload": true,
+    "isolation": "subprocess",
+    "validation_on_load": true
+  }
+}

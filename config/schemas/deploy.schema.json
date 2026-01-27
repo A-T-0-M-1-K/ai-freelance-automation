@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/deploy.schema.json",
+  "title": "Deployment Configuration Schema",
+  "description": "Schema for deployment and infrastructure configuration of the AI Freelance Automation system.",
+  "type": "object",
+  "properties": {
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["development", "staging", "production", "enterprise"],
+          "description": "Deployment environment mode."
+        },
+        "auto_scaling": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "min_instances": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "max_instances": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "cpu_threshold_percent": { "type": "integer", "minimum": 10, "maximum": 95 },
+            "memory_threshold_mb": { "type": "integer", "minimum": 128 }
+          },
+          "required": ["enabled", "min_instances", "max_instances"],
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpu_cores": { "type": "integer", "minimum": 1 },
+            "ram_gb": { "type": "number", "minimum": 0.5 },
+            "gpu_enabled": { "type": "boolean" },
+            "storage_gb": { "type": "integer", "minimum": 10 },
+            "swap_enabled": { "type": "boolean" }
+          },
+          "required": ["cpu_cores", "ram_gb", "storage_gb"],
+          "additionalProperties": false
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "bind_address": { "type": "string", "format": "ipv4" },
+            "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+            "ssl_enabled": { "type": "boolean" },
+            "cors_allowed_origins": {
+              "type": "array",
+              "items": { "type": "string", "format": "uri" },
+              "uniqueItems": true
+            },
+            "rate_limit_requests_per_minute": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["bind_address", "port", "ssl_enabled"],
+          "additionalProperties": false
+        },
+        "security": {
+          "type": "object",
+          "properties": {
+            "hsm_enabled": { "type": "boolean" },
+            "key_rotation_days": { "type": "integer", "minimum": 1, "maximum": 365 },
+            "audit_log_retention_days": { "type": "integer", "minimum": 7, "maximum": 3650 },
+            "gdpr_compliant": { "type": "boolean" },
+            "pci_dss_compliant": { "type": "boolean" },
+            "hipaa_compliant": { "type": "boolean" }
+          },
+          "required": [
+            "hsm_enabled",
+            "key_rotation_days",
+            "audit_log_retention_days",
+            "gdpr_compliant"
+          ],
+          "additionalProperties": false
+        },
+        "integrations": {
+          "type": "object",
+          "properties": {
+            "platforms": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["upwork", "fiverr", "freelancer", "kwork", "toptal", "custom"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "payment_providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["stripe", "paypal", "yoomoney", "crypto", "bank_transfer"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "ai_providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["openai", "anthropic", "google", "local", "custom"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "monitoring_backends": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["prometheus", "grafana", "datadog", "self_hosted"]
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": ["platforms", "payment_providers", "ai_providers"],
+          "additionalProperties": false
+        },
+        "logging": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            },
+            "structured": { "type": "boolean" },
+            "retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 },
+            "enable_tracing": { "type": "boolean" }
+          },
+          "required": ["level", "structured", "retention_days"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "mode",
+        "auto_scaling",
+        "resources",
+        "network",
+        "security",
+        "integrations",
+        "logging"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": ["deployment"],
+  "additionalProperties": false
+}

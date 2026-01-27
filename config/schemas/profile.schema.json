@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-freelance-automation.com/schemas/profile.schema.json",
+  "title": "FreelancerProfile",
+  "description": "Autonomous AI freelancer profile used for bidding, communication, and task execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_id",
+    "name",
+    "primary_language",
+    "skills",
+    "platforms",
+    "security",
+    "communication_style",
+    "pricing_strategy"
+  ],
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+      "description": "UUIDv4 identifier for the profile (immutable)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 50,
+      "pattern": "^[\\p{L}\\p{M}'\\-\\.\\s]+$",
+      "description": "Human-readable name displayed to clients."
+    },
+    "primary_language": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "examples": ["en", "en-US", "ru", "es-ES"],
+      "description": "Primary language in BCP 47 format."
+    },
+    "supported_languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": ["en"]
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["transcription", "translation", "copywriting", "editing", "proofreading", "custom"]
+          },
+          "subcategories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          "proficiency_level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "1 = beginner, 10 = expert"
+          },
+          "quality_threshold": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 0.95,
+            "description": "Minimum acceptable quality score (0.0–1.0)"
+          }
+        },
+        "required": ["category", "subcategories", "proficiency_level"],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "platforms": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_]+$": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "username": { "type": "string", "minLength": 1 },
+            "api_key_ref": { "type": "string", "format": "uuid" },
+            "auto_bid": { "type": "boolean" },
+            "max_concurrent_jobs": { "type": "integer", "minimum": 0, "maximum": 100 }
+          },
+          "required": ["enabled", "username", "api_key_ref"],
+          "additionalProperties": false
+        }
+      },
+      "minProperties": 1,
+      "description": "Platform-specific credentials and settings (e.g., 'upwork', 'fiverr')."
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "data_encryption_enabled": { "type": "boolean", "default": true },
+        "pii_masking_enabled": { "type": "boolean", "default": true },
+        "audit_logging_level": {
+          "type": "string",
+          "enum": ["none", "basic", "detailed", "forensic"],
+          "default": "detailed"
+        }
+      },
+      "required": ["data_encryption_enabled", "pii_masking_enabled", "audit_logging_level"],
+      "additionalProperties": false
+    },
+    "communication_style": {
+      "type": "object",
+      "properties": {
+        "tone": {
+          "type": "string",
+          "enum": ["professional", "friendly", "technical", "creative", "formal"]
+        },
+        "response_speed": {
+          "type": "string",
+          "enum": ["immediate", "within_1h", "within_4h", "within_24h"]
+        },
+        "emotional_intelligence_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 4
+        }
+      },
+      "required": ["tone", "response_speed"],
+      "additionalProperties": false
+    },
+    "pricing_strategy": {
+      "type": "object",
+      "properties": {
+        "base_rate_per_hour_usd": {
+          "type": "number",
+          "minimum": 5.0,
+          "maximum": 500.0
+        },
+        "dynamic_pricing_enabled": { "type": "boolean", "default": true },
+        "min_acceptable_margin": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 0.9,
+          "default": 0.3
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "default": "USD"
+        }
+      },
+      "required": ["base_rate_per_hour_usd", "dynamic_pricing_enabled"],
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_updated": { "type": "string", "format": "date-time" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      },
+      "required": ["created_at", "version"],
+      "additionalProperties": false
+    }
+  }
+}

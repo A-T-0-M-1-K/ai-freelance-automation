@@ -1,0 +1,127 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "description": "Configuration for supported freelance platforms. Secrets are NEVER stored here — use encrypted key manager.",
+  "platforms": {
+    "upwork": {
+      "enabled": true,
+      "type": "official_api",
+      "api_base_url": "https://www.upwork.com/api",
+      "auth": {
+        "method": "oauth2",
+        "client_id_ref": "UPWORK_CLIENT_ID",
+        "client_secret_ref": "UPWORK_CLIENT_SECRET",
+        "redirect_uri": "https://localhost:8443/auth/upwork/callback"
+      },
+      "job_scraping": {
+        "supports_realtime": true,
+        "categories": ["transcription", "translation", "copywriting"],
+        "filters": {
+          "min_budget_usd": 20,
+          "max_competition_ratio": 0.7,
+          "exclude_keywords": ["urgent", "asap", "no time"]
+        }
+      },
+      "bid_automation": {
+        "enabled": true,
+        "max_bids_per_day": 15,
+        "template_vars": ["job_title", "client_history", "budget", "deadline_hours"]
+      },
+      "communication": {
+        "supports_messaging": true,
+        "auto_response_delay_sec": [30, 300]
+      },
+      "payment": {
+        "escrow_supported": true,
+        "milestone_tracking": true
+      }
+    },
+    "freelancer_ru": {
+      "enabled": true,
+      "type": "hybrid_scraping_api",
+      "web_base_url": "https://freelance.ru",
+      "api_endpoints": {
+        "jobs": "/api/v2/projects",
+        "profile": "/api/v2/profile"
+      },
+      "auth": {
+        "method": "session_cookie",
+        "login_url": "https://freelance.ru/login",
+        "credential_ref": "FREELANCER_RU_SESSION"
+      },
+      "job_scraping": {
+        "supports_realtime": false,
+        "polling_interval_minutes": 5,
+        "categories": ["transcription", "translation", "copywriting", "editing"],
+        "filters": {
+          "min_budget_rub": 500,
+          "only_fixed_price": true,
+          "verified_clients_only": true
+        }
+      },
+      "bid_automation": {
+        "enabled": true,
+        "max_bids_per_day": 20,
+        "require_proposal_text": true
+      },
+      "communication": {
+        "supports_messaging": true,
+        "auto_response_delay_sec": [60, 600]
+      },
+      "payment": {
+        "escrow_supported": false,
+        "invoice_required": true
+      }
+    },
+    "kwork": {
+      "enabled": true,
+      "type": "gig_marketplace",
+      "base_url": "https://kwork.ru",
+      "auth": {
+        "method": "token_header",
+        "token_ref": "KWORK_API_TOKEN"
+      },
+      "gig_management": {
+        "auto_update_gigs": true,
+        "keywords": ["transcribe audio", "translate document", "write article"],
+        "pricing_strategy": "dynamic_competitive"
+      },
+      "job_scraping": {
+        "supports_realtime": true,
+        "categories": ["audio", "text", "translation"],
+        "filters": {
+          "min_price_rub": 300,
+          "exclude_private_offers": true
+        }
+      },
+      "communication": {
+        "supports_messaging": true,
+        "auto_response_delay_sec": [10, 120]
+      },
+      "payment": {
+        "platform_fee_percent": 10,
+        "payout_delay_days": 3
+      }
+    },
+    "fiverr": {
+      "enabled": false,
+      "type": "gig_marketplace",
+      "note": "Requires browser automation (Puppeteer) due to lack of public API. Enable only with headless browser support.",
+      "base_url": "https://fiverr.com",
+      "automation_type": "browser_automation",
+      "gig_management": {
+        "auto_optimize_gigs": true,
+        "tags": ["transcription", "translation", "copywriting"]
+      },
+      "job_scraping": {
+        "supports_realtime": false,
+        "polling_interval_minutes": 10
+      }
+    }
+  },
+  "global_limits": {
+    "max_concurrent_platforms": 4,
+    "max_total_bids_per_hour": 30,
+    "respect_rate_limits": true
+  }
+}

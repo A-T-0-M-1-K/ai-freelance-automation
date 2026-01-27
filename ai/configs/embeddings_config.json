@@ -1,0 +1,83 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/embeddings-config.schema.json",
+  "version": "1.2.0",
+  "description": "Configuration for text embedding models used across transcription, translation, copywriting, and client communication services.",
+  "default_provider": "openai",
+  "providers": {
+    "openai": {
+      "enabled": true,
+      "model_name": "text-embedding-3-large",
+      "dimensions": 3072,
+      "max_input_tokens": 8191,
+      "api_base_url": "https://api.openai.com/v1",
+      "timeout_sec": 30,
+      "retry_attempts": 3,
+      "backoff_factor": 1.5,
+      "cache_embeddings": true,
+      "use_batch_processing": true
+    },
+    "anthropic": {
+      "enabled": false,
+      "note": "Anthropic does not currently offer public embeddings API. Placeholder for future use."
+    },
+    "google": {
+      "enabled": true,
+      "model_name": "textembedding-gecko@003",
+      "dimensions": 768,
+      "project_id": "${GOOGLE_CLOUD_PROJECT_ID}",
+      "location": "us-central1",
+      "max_input_tokens": 3072,
+      "timeout_sec": 25,
+      "retry_attempts": 2,
+      "cache_embeddings": true
+    },
+    "local": {
+      "enabled": true,
+      "model_name": "BAAI/bge-large-en-v1.5",
+      "dimensions": 1024,
+      "device": "auto",
+      "precision": "float16",
+      "max_input_tokens": 512,
+      "batch_size": 32,
+      "cache_dir": "${AI_FREELANCE_AUTOMATION}/ai/models/embeddings_cache",
+      "use_sentence_transformers": true,
+      "normalize_embeddings": true
+    },
+    "custom": {
+      "enabled": false,
+      "model_path": "",
+      "dimensions": 0,
+      "tokenizer_path": "",
+      "max_input_tokens": 512,
+      "device": "cpu",
+      "precision": "float32"
+    }
+  },
+  "embedding_strategy": {
+    "fallback_chain": ["openai", "local", "google"],
+    "semantic_similarity_threshold": 0.75,
+    "chunking": {
+      "enabled": true,
+      "strategy": "recursive",
+      "max_chunk_size": 500,
+      "overlap": 50,
+      "separator": "\n\n"
+    },
+    "caching": {
+      "enabled": true,
+      "backend": "redis",
+      "ttl_hours": 168,
+      "max_size_gb": 10
+    }
+  },
+  "security": {
+    "log_embeddings": false,
+    "mask_pii_in_inputs": true,
+    "require_encryption_at_rest": true
+  },
+  "monitoring": {
+    "track_latency": true,
+    "track_token_usage": true,
+    "alert_on_failure_rate": 0.05
+  }
+}

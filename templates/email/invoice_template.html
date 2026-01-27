@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="{{ language | default('en') }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ _('Invoice') }} #{{ invoice_id }}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 700px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: white;
+      padding: 30px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .section {
+      margin-bottom: 24px;
+    }
+    .section h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #1f2937;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .label {
+      font-weight: 600;
+      color: #4b5563;
+    }
+    .value {
+      text-align: right;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    .items-table th,
+    .items-table td {
+      padding: 12px 8px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .items-table th {
+      font-weight: 600;
+      color: #111827;
+    }
+    .total-row {
+      font-weight: bold;
+      font-size: 18px;
+      margin-top: 16px;
+    }
+    .footer {
+      padding: 24px;
+      background: #f3f4f6;
+      text-align: center;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .button {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 10px 24px;
+      background: #4f46e5;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    @media (max-width: 600px) {
+      .row {
+        flex-direction: column;
+        gap: 4px;
+      }
+      .value {
+        text-align: left;
+        font-weight: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{ _('Invoice') }} #{{ invoice_id }}</h1>
+    </div>
+
+    <div class="content">
+      <!-- From / To -->
+      <div class="section">
+        <div class="row">
+          <div>
+            <div class="label">{{ _('From') }}</div>
+            <div>{{ freelancer_name }}</div>
+            <div>{{ freelancer_email }}</div>
+            {% if freelancer_vat_id %}
+              <div>{{ _('VAT ID') }}: {{ freelancer_vat_id }}</div>
+            {% endif %}
+          </div>
+          <div style="text-align: right;">
+            <div class="label">{{ _('To') }}</div>
+            <div>{{ client_name }}</div>
+            <div>{{ client_email }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dates -->
+      <div class="section">
+        <div class="row">
+          <span class="label">{{ _('Invoice Date') }}</span>
+          <span class="value">{{ invoice_date }}</span>
+        </div>
+        <div class="row">
+          <span class="label">{{ _('Due Date') }}</span>
+          <span class="value">{{ due_date }}</span>
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div class="section">
+        <h2>{{ _('Services Rendered') }}</h2>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>{{ _('Description') }}</th>
+              <th>{{ _('Quantity') }}</th>
+              <th>{{ _('Unit Price') }}</th>
+              <th>{{ _('Amount') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td>{{ item.description }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.unit_price | format_currency(currency) }}</td>
+              <td>{{ (item.quantity * item.unit_price) | format_currency(currency) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="row total-row">
+          <span>{{ _('Total') }}</span>
+          <span class="value">{{ total | format_currency(currency) }}</span>
+        </div>
+        {% if tax_amount and tax_amount > 0 %}
+        <div class="row">
+          <span class="label">{{ _('Tax') }} ({{ tax_rate }}%)</span>
+          <span class="value">{{ tax_amount | format_currency(currency) }}</span>
+        </div>
+        <div class="row total-row">
+          <span>{{ _('Total with Tax') }}</span>
+          <span class="value">{{ (total + tax_amount) | format_currency(currency) }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Payment Info -->
+      <div class="section">
+        <h2>{{ _('Payment Instructions') }}</h2>
+        <p>{{ _('Please complete payment by the due date using one of the following methods:') }}</p>
+        <ul>
+          {% for method in payment_methods %}
+          <li>{{ method.name }}: {{ method.details }}</li>
+          {% endfor %}
+        </ul>
+        {% if payment_link %}
+          <a href="{{ payment_link }}" class="button">{{ _('Pay Now') }}</a>
+        {% endif %}
+      </div>
+
+      <!-- Notes -->
+      {% if notes %}
+      <div class="section">
+        <h2>{{ _('Notes') }}</h2>
+        <p>{{ notes }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="footer">
+      <p>
+        {{ _('Generated automatically by AI Freelance Automation System') }}<br>
+        {{ _('This invoice is legally valid and digitally signed.') }}
+      </p>
+    </div>
+  </div>
+</body>
+</html>

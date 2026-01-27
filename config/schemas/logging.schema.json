@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/logging.schema.json",
+  "title": "Logging Configuration Schema",
+  "description": "Schema for validating the logging configuration of the AI Freelance Automation system.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Configuration version. Must be 1."
+    },
+    "log_level": {
+      "type": "string",
+      "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "AUDIT"],
+      "default": "INFO",
+      "description": "Global minimum log level. AUDIT is a custom level for security events."
+    },
+    "handlers": {
+      "type": "object",
+      "properties": {
+        "console": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "level": { "$ref": "#/definitions/logLevel" },
+            "format": { "type": "string" }
+          },
+          "required": ["enabled", "level"],
+          "additionalProperties": false
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "level": { "$ref": "#/definitions/logLevel" },
+            "directory": {
+              "type": "string",
+              "pattern": "^[/a-zA-Z0-9_\\-\\\\.:]+$"
+            },
+            "max_size_mb": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            },
+            "backup_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "format": { "type": "string" }
+          },
+          "required": ["enabled", "level", "directory", "max_size_mb", "backup_count"],
+          "additionalProperties": false
+        },
+        "syslog": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "level": { "$ref": "#/definitions/logLevel" },
+            "address": { "type": "string" },
+            "facility": { "type": "string" }
+          },
+          "required": ["enabled", "level", "address"],
+          "additionalProperties": false
+        },
+        "audit_log": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": {
+              "type": "string",
+              "pattern": "^[/a-zA-Z0-9_\\-\\\\.:]+$"
+            },
+            "encrypt_at_rest": { "type": "boolean" },
+            "immutable": { "type": "boolean" }
+          },
+          "required": ["enabled", "path", "encrypt_at_rest", "immutable"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["console", "file", "audit_log"],
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_.]+$": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "AUDIT", "OFF"]
+        }
+      },
+      "description": "Per-module log level overrides (e.g., 'core.security', 'services.transcription')."
+    },
+    "pii_masking": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "regex": { "type": "string", "format": "regex" },
+              "replacement": { "type": "string" }
+            },
+            "required": ["name", "regex", "replacement"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["enabled", "patterns"],
+      "additionalProperties": false
+    },
+    "structured_logging": {
+      "type": "boolean",
+      "description": "Enable JSON-formatted logs for machine parsing (e.g., by ELK stack)."
+    },
+    "performance_metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "sample_rate": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      },
+      "required": ["enabled", "sample_rate"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "log_level",
+    "handlers",
+    "modules",
+    "pii_masking",
+    "structured_logging",
+    "performance_metrics"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "logLevel": {
+      "type": "string",
+      "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "AUDIT", "OFF"]
+    }
+  }
+}

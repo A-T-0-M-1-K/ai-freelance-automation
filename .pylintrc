@@ -1,0 +1,118 @@
+[MASTER]
+# Используем рекурсивный анализ всей структуры
+ignore=venv,.git,__pycache__,logs,docs,tests/__pycache__
+ignore-patterns=.*\.tmp$,.*\.log$
+extension-pkg-whitelist=
+
+# Путь к исходному коду
+init-hook='import sys; sys.path.append(".")'
+
+# Отключаем сообщения о "too-many-*" только при обоснованной сложности
+max-args=12
+max-locals=30
+max-returns=10
+max-branches=25
+max-statements=80
+
+# Поддержка модульной архитектуры
+good-names=i,j,k,ex,_,id,db,ai,ml,ok,io,up,tx,ts,fp
+
+[MESSAGES CONTROL]
+# Отключаем редко используемые или мешающие правила
+disable=
+    # Разрешаем длинные строки — документация и AI-логика требуют читаемости
+    line-too-long,
+    # Разрешаем использование protected members внутри ядра
+    protected-access,
+    # Отключаем жалобы на динамические атрибуты (DI, service locator)
+    no-member,
+    # Разрешаем исключения без специфичного типа в emergency recovery
+    broad-except,
+    # Не ругаться на async def как "too-few-methods"
+    too-few-public-methods,
+    # Разрешаем длинные имена путей
+    invalid-name
+
+# Включаем строгие проверки безопасности
+enable=
+    dangerous-default-value,
+    deprecated-module,
+    eval-used,
+    exec-used,
+    global-statement,
+    import-outside-toplevel
+
+[REPORTS]
+output-format=colorized
+reports=no
+score=yes
+
+[BASIC]
+# Строгие требования к именованию
+variable-naming-style=snake_case
+function-naming-style=snake_case
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+attr-naming-style=snake_case
+argument-naming-style=snake_case
+module-naming-style=snake_case
+
+# Минимальная длина имени — 2 символа (разрешаем 'id', 'ok' и т.п.)
+min-name-length=2
+
+[FORMAT]
+max-line-length=120
+indent-string='    '
+single-line-class-stmt=no
+single-line-if-stmt=no
+
+[VARIABLES]
+# Требовать аннотации типов для всех переменных уровня модуля
+init-import=no
+dummy-variables-rgx=_|dummy
+
+[TYPECHECK]
+# Строгая проверка типов
+ignored-modules=
+ignored-classes=
+generated-members=logger,config,crypto,components
+
+# Проверять, что все функции имеют аннотации
+mixin-class-rgx=".*Mixin$"
+
+[DESIGN]
+# Глубина наследования — до 7 уровней (для plugin-архитектуры)
+max-inheritance-depth=7
+# Максимум 15 методов в классе (но можно увеличить для orchestrator'ов)
+max-public-methods=20
+# Минимум 2 публичных метода (кроме dataclass-подобных)
+min-public-methods=1
+
+[IMPORTS]
+# Запрет циклических импортов
+cyclic-import=yes
+# Относительные импорты запрещены — только абсолютные
+relative-import=no
+
+[ASYNC]
+# Проверка корректного использования async/await
+check-async-protocol=yes
+
+[SIMILARITIES]
+# Дублирование кода — недопустимо
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes
+min-similarity-lines=10
+
+[LOGGING]
+logging-format-style=new
+logging-modules=logging
+
+[EXCEPTIONS]
+overgeneral-exceptions=Exception
+
+[SECURITY]
+# Безопасность — критически важна
+check-typeddict-missing-keys=yes
+check-missing-type-annotation=yes

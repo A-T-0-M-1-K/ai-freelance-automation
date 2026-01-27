@@ -1,0 +1,115 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/performance.schema.json",
+  "version": "1.2.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "description": "Performance tuning configuration for AI Freelance Automation System",
+
+  "cache": {
+    "enabled": true,
+    "strategy": "adaptive_predictive",
+    "max_size_mb": 2048,
+    "ttl_seconds": 3600,
+    "eviction_policy": "lru_with_priority",
+    "predictive_prefetch": {
+      "enabled": true,
+      "lookahead_window_minutes": 15,
+      "confidence_threshold": 0.75,
+      "model_warmup_delay_sec": 2
+    },
+    "storage_backends": [
+      {
+        "type": "in_memory",
+        "priority": 10
+      },
+      {
+        "type": "redis",
+        "priority": 5,
+        "connection": {
+          "host": "localhost",
+          "port": 6379,
+          "db": 2,
+          "password_env": "REDIS_CACHE_PASSWORD"
+        }
+      }
+    ]
+  },
+
+  "memory_management": {
+    "auto_gc_enabled": true,
+    "gc_threshold_generation_0": 700,
+    "gc_threshold_generation_1": 1000,
+    "gc_threshold_generation_2": 10000,
+    "oom_protection": {
+      "enabled": true,
+      "memory_limit_mb": 32768,
+      "graceful_degradation": true,
+      "emergency_swap_to_disk": true
+    },
+    "model_unload_on_idle": {
+      "enabled": true,
+      "idle_timeout_sec": 300,
+      "preserve_core_models": ["gpt-4o", "whisper-large-v3", "claude-3.5"]
+    }
+  },
+
+  "auto_scaling": {
+    "enabled": true,
+    "scaling_strategy": "predictive_hybrid",
+    "min_workers": 2,
+    "max_workers": 50,
+    "scale_up_threshold_cpu_percent": 70,
+    "scale_down_threshold_cpu_percent": 30,
+    "scale_up_threshold_memory_percent": 75,
+    "scale_down_stabilization_sec": 120,
+    "burst_mode": {
+      "enabled": true,
+      "max_burst_workers": 100,
+      "burst_duration_minutes": 10,
+      "cooldown_minutes": 30
+    }
+  },
+
+  "load_balancing": {
+    "algorithm": "weighted_least_connections",
+    "health_check_interval_sec": 10,
+    "failover_timeout_sec": 30,
+    "sticky_sessions": false,
+    "component_weights": {
+      "transcription_service": 1.0,
+      "translation_service": 1.2,
+      "copywriting_service": 0.8,
+      "decision_engine": 0.5
+    }
+  },
+
+  "profiling": {
+    "enabled": false,
+    "sampling_rate": 0.05,
+    "output_format": "pprof",
+    "storage_path": "logs/profiling/",
+    "retention_days": 7
+  },
+
+  "optimization": {
+    "model_quantization": {
+      "enabled": true,
+      "default_precision": "int8",
+      "allow_float16_on_gpu": true
+    },
+    "batch_inference": {
+      "enabled": true,
+      "max_batch_size": 16,
+      "max_wait_ms": 200
+    },
+    "async_io": {
+      "enabled": true,
+      "max_concurrent_requests": 1000
+    }
+  },
+
+  "monitoring_integration": {
+    "prometheus_metrics_enabled": true,
+    "grafana_dashboard_uid": "ai-freelance-perf-main",
+    "custom_metrics_prefix": "ai_freelance_perf"
+  }
+}

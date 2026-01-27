@@ -1,0 +1,118 @@
+{
+  "version": "1.2.0",
+  "notification_channels": {
+    "email": {
+      "enabled": true,
+      "provider": "smtp", // or "sendgrid", "mailgun"
+      "default_template": "professional",
+      "rate_limit_per_hour": 50,
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "from_address": "noreply@ai-freelance.bot",
+      "priority_rules": {
+        "critical": "immediate",
+        "error": "within_5m",
+        "warning": "within_30m",
+        "info": "batch_daily"
+      }
+    },
+    "push": {
+      "enabled": true,
+      "provider": "firebase",
+      "ttl_seconds": 86400,
+      "collapse_key": "freelance_alerts"
+    },
+    "sms": {
+      "enabled": false,
+      "provider": "twilio",
+      "rate_limit_per_day": 10,
+      "only_for_critical": true
+    },
+    "webhook": {
+      "enabled": true,
+      "endpoints": {
+        "monitoring": "https://monitoring.yourdomain.com/webhook",
+        "security_alerts": "https://secops.yourdomain.com/alerts"
+      },
+      "signing_secret_ref": "secrets/webhook_signing_key", // reference to secure storage
+      "timeout_seconds": 10
+    },
+    "in_app": {
+      "enabled": true,
+      "storage": "redis",
+      "retention_days": 30,
+      "badge_count_enabled": true
+    }
+  },
+  "event_rules": {
+    "job_detected": {
+      "level": "info",
+      "channels": ["in_app", "email"],
+      "template": "new_job_opportunity",
+      "cooldown_minutes": 5
+    },
+    "bid_submitted": {
+      "level": "info",
+      "channels": ["in_app"]
+    },
+    "client_message_received": {
+      "level": "info",
+      "channels": ["in_app", "push"],
+      "priority_boost_if_deadline_soon": true
+    },
+    "task_completed": {
+      "level": "info",
+      "channels": ["in_app", "email"]
+    },
+    "payment_received": {
+      "level": "info",
+      "channels": ["in_app", "email"],
+      "include_invoice_link": true
+    },
+    "system_error": {
+      "level": "error",
+      "channels": ["email", "webhook", "push"],
+      "escalate_after_minutes": 10
+    },
+    "security_anomaly": {
+      "level": "critical",
+      "channels": ["email", "sms", "webhook"],
+      "bypass_rate_limits": true,
+      "require_acknowledgement": true
+    },
+    "auto_recovery_triggered": {
+      "level": "warning",
+      "channels": ["email", "in_app"]
+    },
+    "model_performance_degraded": {
+      "level": "warning",
+      "channels": ["webhook", "in_app"]
+    },
+    "daily_summary": {
+      "level": "info",
+      "channels": ["email"],
+      "schedule": "0 8 * * *", // cron: every day at 08:00 UTC
+      "include_metrics": ["jobs_processed", "revenue", "client_satisfaction"]
+    }
+  },
+  "templates": {
+    "languages": ["en", "ru", "es", "fr", "de"],
+    "default_language": "en",
+    "paths": {
+      "email": "templates/notifications/email/",
+      "push": "templates/notifications/push/",
+      "sms": "templates/notifications/sms/"
+    }
+  },
+  "global_settings": {
+    "do_not_disturb": {
+      "enabled": false,
+      "schedule": "22:00-07:00",
+      "timezone": "UTC",
+      "allow_critical": true
+    },
+    "user_preferences_override": true,
+    "log_all_notifications": true,
+    "audit_trail_retention_days": 90
+  }
+}

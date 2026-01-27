@@ -1,0 +1,149 @@
+{
+  "$schema": "../schemas/config_schema_v1.json",
+  "environment": "staging",
+  "version": "1.0.0",
+  "metadata": {
+    "description": "Staging environment configuration for AI Freelance Automation System",
+    "last_updated": "2026-01-25",
+    "maintainer": "system@ai-freelance.dev"
+  },
+
+  "core": {
+    "autonomy_level": "full",
+    "max_concurrent_jobs": 10,
+    "decision_timeout_seconds": 30,
+    "self_healing_enabled": true,
+    "auto_scaling_enabled": true,
+    "emergency_recovery_threshold": 3,
+    "log_level": "DEBUG",
+    "telemetry_enabled": true
+  },
+
+  "ai": {
+    "models": {
+      "transcription": {
+        "provider": "openai",
+        "model_name": "whisper-1",
+        "fallback": ["local/whisper-large-v3"]
+      },
+      "translation": {
+        "provider": "google",
+        "model_name": "translate-v2",
+        "fallback": ["local/nllb-200-distilled-1.3B"]
+      },
+      "copywriting": {
+        "provider": "anthropic",
+        "model_name": "claude-3-haiku",
+        "fallback": ["openai/gpt-4o-mini"]
+      }
+    },
+    "continuous_learning": {
+      "enabled": true,
+      "feedback_window_hours": 168,
+      "retrain_threshold": 0.85
+    },
+    "inference": {
+      "max_retries": 3,
+      "timeout_seconds": 120,
+      "use_gpu_if_available": true
+    }
+  },
+
+  "platforms": {
+    "enabled": ["upwork", "freelance_ru", "kwork"],
+    "upwork": {
+      "api_key_ref": "UPWORK_API_KEY_STAGING",
+      "client_id_ref": "UPWORK_CLIENT_ID_STAGING",
+      "polling_interval_minutes": 5,
+      "bid_template_path": "templates/bids/upwork_default.j2"
+    },
+    "freelance_ru": {
+      "login_method": "session_cookies",
+      "scraping_delay_ms": 2000,
+      "anti_detection": true
+    },
+    "kwork": {
+      "auto_accept_orders": false,
+      "min_rating_to_bid": 4.5
+    }
+  },
+
+  "communication": {
+    "languages_supported": ["en", "ru", "es", "de", "fr", "zh", "ar"],
+    "default_language": "en",
+    "sentiment_analysis_enabled": true,
+    "response_time_target_minutes": 15,
+    "tone_presets": {
+      "professional": true,
+      "friendly": true,
+      "urgent": true
+    }
+  },
+
+  "payment": {
+    "providers": ["stripe_test", "paypal_sandbox", "yoomoney_test"],
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_schedule": [1, 3, 7],
+    "fraud_detection_sensitivity": "medium",
+    "tax_calculation": {
+      "enabled": true,
+      "default_country": "US",
+      "vat_included": false
+    }
+  },
+
+  "security": {
+    "encryption": {
+      "data_at_rest": "AES-256-GCM",
+      "data_in_transit": "TLS-1.3",
+      "key_rotation_days": 90
+    },
+    "auth": {
+      "session_timeout_minutes": 60,
+      "mfa_required": false
+    },
+    "audit_logging": {
+      "enabled": true,
+      "log_sensitive_operations": true,
+      "retention_days": 90
+    },
+    "anomaly_detection": {
+      "enabled": true,
+      "model_update_interval_hours": 24
+    }
+  },
+
+  "monitoring": {
+    "metrics_exporters": ["prometheus", "console"],
+    "alerting": {
+      "enabled": true,
+      "channels": ["email", "webhook"],
+      "critical_error_notify_immediately": true
+    },
+    "health_check_interval_seconds": 10,
+    "predictive_maintenance_enabled": true
+  },
+
+  "storage": {
+    "cache_backend": "redis",
+    "cache_ttl_seconds": 3600,
+    "file_storage": "local_staging",
+    "database": "postgresql://user:pass@localhost:5432/ai_freelance_staging"
+  },
+
+  "scaling": {
+    "auto_scaler": {
+      "cpu_threshold_percent": 75,
+      "memory_threshold_percent": 80,
+      "max_instances": 4,
+      "cooldown_seconds": 120
+    }
+  },
+
+  "feature_flags": {
+    "blockchain_contracts": false,
+    "voice_communication": false,
+    "real_time_collaboration": false,
+    "advanced_risk_analysis": true
+  }
+}

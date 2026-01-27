@@ -1,0 +1,125 @@
+{
+  "version": "2.1.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "description": "Backup schedule for AI Freelance Automation System. Defines frequency, retention, encryption, and scope for all backup operations.",
+  "global_settings": {
+    "enabled": true,
+    "default_encryption": "AES-256-GCM",
+    "key_rotation_compliance": true,
+    "compression_enabled": true,
+    "verify_after_backup": true,
+    "storage_redundancy": "3x (geo-distributed)"
+  },
+  "schedules": [
+    {
+      "name": "critical_system_state",
+      "description": "Full snapshot of core system state (configs, keys, active jobs, AI context)",
+      "frequency_minutes": 5,
+      "retention_hours": 72,
+      "type": "incremental",
+      "scope": [
+        "core/config/",
+        "core/security/keys/",
+        "runtime/active_jobs/",
+        "ai/context_cache/",
+        "logs/audit/"
+      ],
+      "encryption_level": "high",
+      "requires_hsm": true,
+      "notify_on_failure": true,
+      "auto_restore_test": false
+    },
+    {
+      "name": "client_communications",
+      "description": "Encrypted backup of all client messages and contracts",
+      "frequency_minutes": 15,
+      "retention_days": 365,
+      "type": "differential",
+      "scope": [
+        "data/clients/",
+        "data/contracts/",
+        "data/messages/",
+        "data/sentiment_history/"
+      ],
+      "encryption_level": "high",
+      "gdpr_compliant": true,
+      "anonymize_for_backup": false,
+      "notify_on_failure": true
+    },
+    {
+      "name": "payment_and_financial",
+      "description": "PCI DSS-compliant backup of invoices, transactions, tax records",
+      "frequency_minutes": 30,
+      "retention_years": 7,
+      "type": "full",
+      "scope": [
+        "data/payments/",
+        "data/invoices/",
+        "data/tax_records/",
+        "logs/payment_audit/"
+      ],
+      "encryption_level": "maximum",
+      "pci_dss_compliant": true,
+      "requires_hsm": true,
+      "immutable_storage": true,
+      "notify_on_failure": true
+    },
+    {
+      "name": "ai_model_weights_and_logs",
+      "description": "Backup of fine-tuned models, inference logs, and learning data",
+      "frequency_hours": 6,
+      "retention_days": 90,
+      "type": "full",
+      "scope": [
+        "ai/models/",
+        "ai/training_data/",
+        "logs/ai_inference/",
+        "ai/continuous_learning/"
+      ],
+      "encryption_level": "medium",
+      "compress_before_store": true,
+      "store_in_cold_storage": true
+    },
+    {
+      "name": "daily_full_system_snapshot",
+      "description": "Complete encrypted system image for disaster recovery",
+      "frequency_hours": 24,
+      "retention_days": 30,
+      "type": "full",
+      "scope": [
+        "*/"
+      ],
+      "exclude_patterns": [
+        "temp/",
+        "cache/raw/",
+        "logs/debug/*"
+      ],
+      "encryption_level": "maximum",
+      "requires_hsm": true,
+      "immutable_storage": true,
+      "geo_replication": true,
+      "test_restore_weekly": true
+    }
+  ],
+  "compliance": {
+    "gdpr": {
+      "right_to_erasure_supported": true,
+      "data_minimization_applied": true,
+      "consent_logging_enabled": true
+    },
+    "hipaa": {
+      "phi_detected_and_protected": true,
+      "access_logs_retained": true
+    },
+    "pci_dss": {
+      "no_raw_pan_stored": true,
+      "audit_trail_enabled": true
+    }
+  },
+  "recovery": {
+    "rto_minutes": 15,
+    "rpo_minutes": 5,
+    "auto_failover_enabled": true,
+    "recovery_verification_script": "scripts/verify_backup_integrity.py"
+  }
+}

@@ -1,0 +1,41 @@
+# GPU-accelerated dependencies for AI Freelance Automation
+# Designed for NVIDIA GPUs with CUDA 12.1+
+# Install AFTER requirements.txt: pip install -r requirements-gpu.txt
+
+# Core AI Frameworks (GPU-optimized)
+torch>=2.1.0,<2.3.0 --index-url https://download.pytorch.org/whl/cu121
+torchvision>=0.16.0,<0.18.0 --index-url https://download.pytorch.org/whl/cu121
+torchaudio>=2.1.0,<2.3.0 --index-url https://download.pytorch.org/whl/cu121
+
+# Hugging Face Ecosystem (GPU-aware)
+transformers>=4.35.0,<5.0
+accelerate>=0.25.0         # Enables multi-GPU and mixed-precision
+bitsandbytes>=0.41.0       # 4-bit/8-bit quantization for LLMs
+optimum>=1.15.0            # Optimization for inference (ONNX, etc.)
+sentence-transformers>=2.2.2
+
+# Speech & Transcription (GPU-accelerated)
+openai-whisper>=20231117   # Official Whisper with CUDA support
+faster-whisper>=1.0.0      # Even faster CPU/GPU Whisper implementation
+
+# Large Language Models (Local + GPU)
+llama-cpp-python>=0.2.57 --extra-index-url https://pypi.org/simple/ --no-cache-dir
+# For GPU support in llama-cpp-python, install via:
+# CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python --no-cache-dir
+
+# Vision & Multimodal (if needed for future expansion)
+diffusers>=0.25.0
+invisible-watermark>=0.2.0
+
+# Performance & Memory Optimization
+xformers>=0.0.23.post1     # Memory-efficient attention (for transformers)
+flash-attn>=2.3.0          # Ultra-fast attention (optional, requires build)
+
+# GPU Monitoring & Debugging
+nvidia-ml-py>=12.535.133   # NVML bindings for GPU monitoring
+gpustat>=1.1.1             # CLI GPU status (useful for health_monitor)
+
+# Compatibility Layer
+cuda-python>=12.2.0        # Official CUDA Python bindings (optional but recommended)
+
+# Note: Do NOT install tensorflow or jax unless explicitly needed — they may conflict with PyTorch

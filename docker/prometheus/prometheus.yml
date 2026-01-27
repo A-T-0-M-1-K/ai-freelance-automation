@@ -1,0 +1,103 @@
+# AI_FREELANCE_AUTOMATION - Prometheus Configuration
+# Monitors all core components: app, AI services, platforms, payments, security
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: "{{ .Values.global.environment | default \"development\" }}"
+    cluster: "ai-freelance-cluster"
+
+# Alerting configuration (optional in dev, required in prod)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load alerting rules
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ----------------------------
+  # Core Application (FastAPI/Uvicorn)
+  # ----------------------------
+  - job_name: 'app'
+    static_configs:
+      - targets: ['app:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ----------------------------
+  # Celery Worker Metrics
+  # ----------------------------
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['worker:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # ----------------------------
+  # PostgreSQL Exporter
+  # ----------------------------
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # ----------------------------
+  # Redis Exporter
+  # ----------------------------
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 15s
+
+  # ----------------------------
+  # Node Exporter (System Metrics)
+  # ----------------------------
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # ----------------------------
+  # MinIO (S3-compatible Storage)
+  # ----------------------------
+  - job_name: 'minio'
+    static_configs:
+      - targets: ['minio:9000']
+    metrics_path: '/minio/v2/metrics/cluster'
+    scrape_interval: 30s
+    # Basic auth if enabled
+    # basic_auth:
+    #   username: 'minioadmin'
+    #   password: 'minioadmin'
+
+  # ----------------------------
+  # Blackbox Exporter (HTTP Probes)
+  # ----------------------------
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://localhost  # Replace with real domain in prod
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ----------------------------
+  # Self-Monitoring (Prometheus itself)
+  # ----------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

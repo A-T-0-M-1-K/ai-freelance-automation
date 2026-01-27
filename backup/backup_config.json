@@ -1,0 +1,82 @@
+{
+  "$schema": "https://ai-freelance-automation.schema/backup/v1.json",
+  "version": "1.2.0",
+  "enabled": true,
+
+  "global": {
+    "encryption_enabled": true,
+    "compression_algorithm": "zstd",
+    "compression_level": 6,
+    "checksum_algorithm": "sha3_256",
+    "retention_policy_days": 90,
+    "max_concurrent_backups": 3,
+    "temp_dir": "/var/lib/ai_freelance/tmp/backup"
+  },
+
+  "schedules": {
+    "critical": {
+      "interval_minutes": 15,
+      "priority": "high",
+      "include": ["logs/app", "state/active_jobs", "security/keys/active"]
+    },
+    "standard": {
+      "interval_minutes": 120,
+      "priority": "medium",
+      "include": ["state/", "cache/", "models/active"]
+    },
+    "full": {
+      "interval_hours": 24,
+      "priority": "low",
+      "include": ["**/*"],
+      "exclude": ["logs/debug/*", "tmp/*", ".git"]
+    }
+  },
+
+  "destinations": {
+    "local": {
+      "type": "local",
+      "enabled": true,
+      "path": "/mnt/backups/ai_freelance/",
+      "max_storage_gb": 500
+    },
+    "cloud_s3": {
+      "type": "s3",
+      "enabled": true,
+      "bucket": "ai-freelance-backups-prod",
+      "region": "eu-west-1",
+      "encryption_at_rest": true,
+      "server_side_encryption": "AES256",
+      "lifecycle_rules": {
+        "move_to_glacier_after_days": 30,
+        "delete_after_days": 365
+      }
+    },
+    "cloud_gcs": {
+      "type": "gcs",
+      "enabled": false,
+      "bucket": "ai-freelance-backups-gcs",
+      "project_id": "ai-freelance-prod"
+    }
+  },
+
+  "security": {
+    "encrypt_with_key_id": "backup-master-key-v2",
+    "key_rotation_days": 90,
+    "require_hsm": true,
+    "audit_log_backup_operations": true
+  },
+
+  "recovery": {
+    "auto_restore_on_corruption": true,
+    "verify_checksums_on_restore": true,
+    "max_restore_attempts": 3,
+    "fallback_to_older_version_if_failed": true
+  },
+
+  "monitoring": {
+    "emit_metrics_to": ["prometheus", "datadog"],
+    "alert_on_failure": true,
+    "alert_on_size_anomaly": true,
+    "log_level": "info"
+  }
+}

@@ -1,0 +1,492 @@
+openapi: 3.1.0
+info:
+  title: AI Freelance Automation System API
+  description: |
+    Fully autonomous AI freelancer that replaces humans on freelance platforms.
+    Handles job discovery, bidding, execution (transcription/translation/copywriting),
+    client communication, payment processing, self-healing, and continuous learning.
+    
+    All endpoints are secured. System supports GDPR, PCI DSS, HIPAA compliance.
+  version: "2.0.0"
+  contact:
+    name: System Administrator
+    email: admin@ai-freelance.autonomous
+  license:
+    name: Proprietary
+    url: https://ai-freelance.autonomous/license
+
+servers:
+  - url: https://api.ai-freelance.autonomous/v2
+    description: Production Server
+  - url: http://localhost:8080/v2
+    description: Local Development
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /jobs/search:
+    get:
+      summary: Search relevant freelance jobs across platforms
+      operationId: searchJobs
+      tags:
+        - Jobs
+      parameters:
+        - name: platforms
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [upwork, fiverr, kwork, freelance_ru, custom]
+        - name: categories
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [transcription, translation, copywriting, editing, proofreading]
+        - name: min_budget
+          in: query
+          schema:
+            type: number
+            format: float
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of filtered jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /jobs/{job_id}/bid:
+    post:
+      summary: Submit an AI-generated bid for a job
+      operationId: submitBid
+      tags:
+        - Jobs
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                price:
+                  type: number
+                  format: float
+                delivery_time_hours:
+                  type: integer
+                proposal_text:
+                  type: string
+              required: [price, delivery_time_hours, proposal_text]
+      responses:
+        '201':
+          description: Bid submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bid_id:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /projects:
+    get:
+      summary: List active projects
+      operationId: listProjects
+      tags:
+        - Projects
+      responses:
+        '200':
+          description: Active projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+
+  /projects/{project_id}/deliver:
+    post:
+      summary: Deliver completed work to client
+      operationId: deliverWork
+      tags:
+        - Projects
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                report:
+                  type: string
+                  format: json
+      responses:
+        '200':
+          description: Work delivered
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /communication/{client_id}/send:
+    post:
+      summary: Send AI-generated message to client
+      operationId: sendMessage
+      tags:
+        - Communication
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                context_id:
+                  type: string
+                language:
+                  type: string
+                  default: en
+              required: [message]
+      responses:
+        '200':
+          description: Message sent
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /ai/transcribe:
+    post:
+      summary: Transcribe audio/video file
+      operationId: transcribeAudio
+      tags:
+        - AI Services
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio_file:
+                  type: string
+                  format: binary
+                source_language:
+                  type: string
+                  default: auto
+      responses:
+        '200':
+          description: Transcription result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text:
+                    type: string
+                  confidence:
+                    type: number
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /ai/translate:
+    post:
+      summary: Translate text between 100+ languages
+      operationId: translateText
+      tags:
+        - AI Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                source_lang:
+                  type: string
+                target_lang:
+                  type: string
+              required: [text, target_lang]
+      responses:
+        '200':
+          description: Translation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResult'
+
+  /ai/copywrite:
+    post:
+      summary: Generate unique copywriting content
+      operationId: generateCopy
+      tags:
+        - AI Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                tone:
+                  type: string
+                  enum: [professional, friendly, persuasive, technical]
+                length_words:
+                  type: integer
+              required: [prompt]
+      responses:
+        '200':
+          description: Generated content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                  quality_score:
+                    type: number
+
+  /payments/invoice/{project_id}:
+    post:
+      summary: Generate and send invoice
+      operationId: createInvoice
+      tags:
+        - Payments
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+                  default: USD
+      responses:
+        '201':
+          description: Invoice created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /system/health:
+    get:
+      summary: Get system health status
+      operationId: getHealth
+      tags:
+        - System
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /system/recover:
+    post:
+      summary: Trigger emergency self-recovery
+      operationId: triggerRecovery
+      tags:
+        - System
+      security:
+        - AdminAuth: []
+      responses:
+        '202':
+          description: Recovery initiated
+
+components:
+  schemas:
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [transcription, translation, copywriting, editing, proofreading]
+        budget_min:
+          type: number
+        budget_max:
+          type: number
+        deadline:
+          type: string
+          format: date-time
+        client_rating:
+          type: number
+        relevance_score:
+          type: number
+      required: [id, platform, title, category]
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, delivered, paid, closed]
+        ai_models_used:
+          type: array
+          items:
+            type: string
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+        deadline:
+          type: string
+          format: date-time
+      required: [id, status]
+
+    TranslationResult:
+      type: object
+      properties:
+        original_text:
+          type: string
+        translated_text:
+          type: string
+        source_lang:
+          type: string
+        target_lang:
+          type: string
+        quality_estimate:
+          type: number
+      required: [translated_text, target_lang]
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, critical]
+        uptime_seconds:
+          type: integer
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+              last_check:
+                type: string
+                format: date-time
+        anomalies_detected:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid or missing authentication token"
+
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Project not found"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    AdminAuth:
+      type: http
+      scheme: bearer
+      description: Requires admin-level JWT token
+
+tags:
+  - name: Jobs
+    description: Job discovery and bidding
+  - name: Projects
+    description: Project lifecycle management
+  - name: Communication
+    description: AI-driven client interaction
+  - name: AI Services
+    description: Core AI capabilities (transcription, translation, etc.)
+  - name: Payments
+    description: Invoicing and payment processing
+  - name: System
+    description: Health, recovery, monitoring

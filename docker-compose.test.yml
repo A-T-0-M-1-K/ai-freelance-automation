@@ -1,0 +1,108 @@
+# AI_FREELANCE_AUTOMATION/docker-compose.test.yml
+#
+# Цель: изолированное окружение для запуска unit, integration и e2e тестов.
+# Особенности:
+# - Использует временные volume'ы (никаких побочных эффектов)
+# - Поддерживает параллельные тесты
+# - Включает все необходимые зависимости (БД, кэш, мониторинг)
+# - Не конфликтует с dev/prod окружениями
+# - Автоматически удаляет контейнеры после завершения
+
+version: '3.8'
+
+services:
+  # Основной контейнер для запуска тестов
+  test-runner:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.dev
+    container_name: ai_freelance_test_runner
+    command: >
+      bash -c "
+        python -m pytest tests/ --tb=short -v --maxfail=5 --disable-warnings
+      "
+    environment:
+      - ENV=testing
+      - PYTHONPATH=/app
+      - LOG_LEVEL=WARNING
+      - DB_HOST=postgres-test
+      - REDIS_HOST=redis-test
+      - MINIO_HOST=minio-test
+      - PROMETHEUS_HOST=prometheus-test
+    volumes:
+      - .:/app
+      - /app/logs/          # чтобы не сохранять логи в хост
+      - /app/data/          # изолированные данные тестов
+    depends_on:
+      - postgres-test
+      - redis-test
+      - minio-test
+    networks:
+      - test-net
+    # Удаляем контейнер после завершения
+    restart: "no"
+    tty: true
+
+  # Тестовая PostgreSQL БД
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: ai_freelance_postgres_test
+    environment:
+      POSTGRES_DB: ai_freelance_test
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "5433:5432"  # отличается от основного порта dev/prod
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    networks:
+      - test-net
+
+  # Тестовый Redis (для кэша и очередей)
+  redis-test:
+    image: redis:7-alpine
+    container_name: ai_freelance_redis_test
+    ports:
+      - "6380:6379"
+    networks:
+      - test-net
+
+  # Тестовое MinIO (S3-совместимое хранилище)
+  minio-test:
+    image: minio/minio:latest
+    container_name: ai_freelance_minio_test
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_test
+      MINIO_ROOT_PASSWORD: minio_test_pass
+    ports:
+      - "9002:9000"   # API
+      - "9003:9001"   # Console
+    volumes:
+      - minio_test_data:/data
+    networks:
+      - test-net
+
+  # Тестовый Prometheus (для проверки метрик)
+  prometheus-test:
+    image: prom/prometheus:latest
+    container_name: ai_freelance_prometheus_test
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge
+
+volumes:
+  postgres_test_data:
+    driver: local
+  minio_test_data:
+    driver: local
+
+# Примечание: этот файл НЕ должен использоваться в production.
+# Он предназначен исключительно для CI/CD и локального тестирования.

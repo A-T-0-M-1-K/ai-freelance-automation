@@ -1,0 +1,122 @@
+# =============================================================================
+# Pre-commit Hooks Configuration
+# Ensures code quality, security, formatting, and consistency across the project
+# Part of AI_FREELANCE_AUTOMATION — fully autonomous freelance system
+# =============================================================================
+
+default_language_version:
+  python: python3.11
+
+default_stages: [commit, push]
+
+repos:
+  # 🔒 Security scanning
+  - repo: https://github.com/PyCQA/bandit
+    rev: "1.7.8"
+    hooks:
+      - id: bandit
+        args: ["-c", "bandit.yml"]
+        exclude: |
+          (?x)^(
+            tests/.*|
+            scripts/.*|
+            tools/.*|
+            .*/__init__.py$
+          )$
+
+  # 🧹 Code formatting
+  - repo: https://github.com/psf/black
+    rev: "24.10.0"
+    hooks:
+      - id: black
+        language_version: python3.11
+
+  # 🧼 Code style & linting
+  - repo: https://github.com/PyCQA/flake8
+    rev: "7.1.0"
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-comprehensions
+          - flake8-docstrings
+          - flake8-annotations
+        exclude: |
+          (?x)^(
+            ai/models/.*|
+            .*/migrations/.*|
+            tests/.*|
+            logs/.*|
+            data/.*|
+            backup/.*
+          )$
+
+  # 📚 Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.13.0"
+    hooks:
+      - id: mypy
+        files: ^(?:core|services|platforms|ai_services|automation|communication)/
+        args: ["--config-file=mypy.ini"]
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+          - types-redis
+          - sqlalchemy-stubs
+
+  # 💅 Imports sorting
+  - repo: https://github.com/pycqa/isort
+    rev: "5.13.2"
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  # 🧪 Test detection (prevent commit if tests are missing)
+  - repo: local
+    hooks:
+      - id: ensure-test-files
+        name: Ensure test files exist for core modules
+        entry: python scripts/tools/test_coverage_validator.py
+        language: system
+        files: ^(?:core|services|platforms)/.*\.py$
+        pass_filenames: false
+
+  # 🗃️ YAML/JSON validation
+  - repo: https://github.com/adrienverge/yamllint
+    rev: "v1.35.1"
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint.yaml"]
+
+  # 📝 Prevent secrets in commits
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: "v8.18.4"
+    hooks:
+      - id: gitleaks
+        args: ["--config-path", "config/gitleaks.toml"]
+
+  # 🧹 Trailing whitespace & end-of-file fixes
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: "v5.0.0"
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: check-json
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+
+  # 🧠 Enforce docstrings in public functions (core only)
+  - repo: https://github.com/terrencepreilly/darglint
+    rev: "v1.8.1"
+    hooks:
+      - id: darglint
+        files: ^core/
+
+# Automatically install pre-commit on clone
+ci:
+  autofix_prs: true
+  autoupdate_commit_msg: "[pre-commit.ci] auto-update"
+  autoupdate_schedule: weekly

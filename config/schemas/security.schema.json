@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/security.schema.json",
+  "title": "Security Configuration Schema",
+  "description": "Strict configuration schema for cryptographic, key management, and compliance settings in AI_FREELANCE_AUTOMATION.",
+  "type": "object",
+  "properties": {
+    "encryption": {
+      "type": "object",
+      "properties": {
+        "symmetric": {
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["AES-256-GCM"]
+            },
+            "key_length_bits": {
+              "type": "integer",
+              "const": 256
+            },
+            "nonce_size_bytes": {
+              "type": "integer",
+              "minimum": 12,
+              "maximum": 16
+            }
+          },
+          "required": ["algorithm", "key_length_bits", "nonce_size_bytes"],
+          "additionalProperties": false
+        },
+        "asymmetric": {
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["RSA-4096", "Ed25519"]
+            },
+            "key_size_bits": {
+              "type": "integer",
+              "enum": [4096, 256]
+            }
+          },
+          "required": ["algorithm", "key_size_bits"],
+          "additionalProperties": false
+        },
+        "hashing": {
+          "type": "object",
+          "properties": {
+            "password_hash": {
+              "type": "string",
+              "enum": ["Argon2id"]
+            },
+            "argon2": {
+              "type": "object",
+              "properties": {
+                "time_cost": { "type": "integer", "minimum": 2, "maximum": 10 },
+                "memory_cost_kb": { "type": "integer", "minimum": 19456, "maximum": 131072 },
+                "parallelism": { "type": "integer", "minimum": 1, "maximum": 8 },
+                "hash_length": { "type": "integer", "const": 32 }
+              },
+              "required": ["time_cost", "memory_cost_kb", "parallelism", "hash_length"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["password_hash", "argon2"],
+          "additionalProperties": false
+        },
+        "integrity": {
+          "type": "object",
+          "properties": {
+            "hmac_algorithm": {
+              "type": "string",
+              "enum": ["HMAC-SHA256"]
+            },
+            "key_rotation_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            }
+          },
+          "required": ["hmac_algorithm", "key_rotation_days"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["symmetric", "asymmetric", "hashing", "integrity"],
+      "additionalProperties": false
+    },
+
+    "key_management": {
+      "type": "object",
+      "properties": {
+        "rotation_policy": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "interval_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            },
+            "grace_period_hours": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 72
+            }
+          },
+          "required": ["enabled", "interval_days", "grace_period_hours"],
+          "additionalProperties": false
+        },
+        "storage": {
+          "type": "object",
+          "properties": {
+            "use_hsm": { "type": "boolean" },
+            "hsm_provider": {
+              "type": ["string", "null"],
+              "enum": ["AWS_CloudHSM", "Azure_KeyVault", "Google_CloudHSM", "Thales", null]
+            },
+            "fallback_to_encrypted_file": { "type": "boolean" },
+            "encrypted_keyfile_path": { "type": "string", "format": "uri" }
+          },
+          "required": ["use_hsm", "fallback_to_encrypted_file"],
+          "if": {
+            "properties": { "use_hsm": { "const": true } },
+            "required": ["hsm_provider"]
+          },
+          "then": {
+            "properties": { "hsm_provider": { "type": "string" } }
+          },
+          "else": {
+            "properties": { "hsm_provider": { "type": "null" } }
+          },
+          "additionalProperties": false
+        },
+        "secret_sharing": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "threshold": { "type": "integer", "minimum": 2, "maximum": 5 },
+            "total_shares": { "type": "integer", "minimum": 3, "maximum": 7 }
+          },
+          "required": ["enabled", "threshold", "total_shares"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["rotation_policy", "storage", "secret_sharing"],
+      "additionalProperties": false
+    },
+
+    "compliance": {
+      "type": "object",
+      "properties": {
+        "gdpr_enabled": { "type": "boolean" },
+        "pci_dss_enabled": { "type": "boolean" },
+        "hipaa_enabled": { "type": "boolean" },
+        "soc2_enabled": { "type": "boolean" },
+        "data_retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "audit_log_retention_days": {
+          "type": "integer",
+          "minimum": 90,
+          "maximum": 3650
+        }
+      },
+      "required": [
+        "gdpr_enabled",
+        "pci_dss_enabled",
+        "hipaa_enabled",
+        "soc2_enabled",
+        "data_retention_days",
+        "audit_log_retention_days"
+      ],
+      "additionalProperties": false
+    },
+
+    "threat_protection": {
+      "type": "object",
+      "properties": {
+        "ddos_protection": { "type": "boolean" },
+        "rate_limiting": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "requests_per_minute": { "type": "integer", "minimum": 1, "maximum": 10000 }
+          },
+          "required": ["enabled", "requests_per_minute"],
+          "additionalProperties": false
+        },
+        "input_sanitization": {
+          "type": "object",
+          "properties": {
+            "xss_protection": { "type": "boolean" },
+            "sql_injection_prevention": { "type": "boolean" }
+          },
+          "required": ["xss_protection", "sql_injection_prevention"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["ddos_protection", "rate_limiting", "input_sanitization"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["encryption", "key_management", "compliance", "threat_protection"],
+  "additionalProperties": false
+}

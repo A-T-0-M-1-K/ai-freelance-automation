@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/ui_config.schema.json",
+  "title": "UI Configuration Schema",
+  "description": "Configuration schema for the adaptive, multi-theme, widget-based UI system.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$",
+      "description": "Semantic version of the UI config."
+    },
+    "display_mode": {
+      "type": "string",
+      "enum": ["compact", "extended", "expert"],
+      "default": "extended",
+      "description": "UI density and information level."
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "string",
+          "enum": ["light", "dark", "custom"]
+        },
+        "custom_theme_path": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Path to custom CSS/JSON theme file (relative to ui/themes/)."
+        }
+      },
+      "required": ["current"],
+      "additionalProperties": false
+    },
+    "responsive": {
+      "type": "object",
+      "properties": {
+        "breakpoints": {
+          "type": "object",
+          "properties": {
+            "mobile": { "type": "integer", "minimum": 0, "maximum": 768 },
+            "tablet": { "type": "integer", "minimum": 769, "maximum": 1024 },
+            "desktop": { "type": "integer", "minimum": 1025 }
+          },
+          "required": ["mobile", "tablet", "desktop"],
+          "additionalProperties": false
+        },
+        "auto_adapt": { "type": "boolean", "default": true }
+      },
+      "required": ["breakpoints", "auto_adapt"],
+      "additionalProperties": false
+    },
+    "widgets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,30}$" },
+          "type": { "type": "string" },
+          "enabled": { "type": "boolean", "default": true },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "integer", "minimum": 0 },
+              "y": { "type": "integer", "minimum": 0 },
+              "width": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "height": { "type": "integer", "minimum": 1, "maximum": 10 }
+            },
+            "required": ["x", "y", "width", "height"],
+            "additionalProperties": false
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["id", "type", "position"],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "sound": { "type": "boolean", "default": true },
+        "desktop_alerts": { "type": "boolean", "default": true },
+        "priority_filter": {
+          "type": "string",
+          "enum": ["all", "critical", "high", "medium"]
+        }
+      },
+      "required": ["enabled", "sound", "desktop_alerts", "priority_filter"],
+      "additionalProperties": false
+    },
+    "accessibility": {
+      "type": "object",
+      "properties": {
+        "high_contrast": { "type": "boolean", "default": false },
+        "screen_reader_support": { "type": "boolean", "default": true },
+        "font_size": { "type": "number", "minimum": 0.8, "maximum": 2.0, "default": 1.0 }
+      },
+      "required": ["high_contrast", "screen_reader_support", "font_size"],
+      "additionalProperties": false
+    },
+    "plugin_ui_extensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "plugin_id": { "type": "string" },
+          "enabled": { "type": "boolean", "default": true },
+          "mount_point": { "type": "string", "enum": ["sidebar", "toolbar", "dashboard", "modal"] }
+        },
+        "required": ["plugin_id", "mount_point"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "version",
+    "display_mode",
+    "theme",
+    "responsive",
+    "widgets",
+    "notifications",
+    "accessibility"
+  ],
+  "additionalProperties": false
+}

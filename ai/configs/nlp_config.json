@@ -1,0 +1,146 @@
+{
+  "$schema": "https://ai-freelance-automation.com/schemas/nlp_config_v1.json",
+  "version": "1.2.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "description": "NLP configuration for AI Freelance Automation system. Controls model selection, parameters, and behavior for transcription, translation, copywriting, editing, and proofreading.",
+
+  "global": {
+    "default_language": "en",
+    "fallback_language": "en",
+    "max_retries_on_failure": 3,
+    "timeout_seconds": 120,
+    "enable_caching": true,
+    "cache_ttl_minutes": 60,
+    "quality_threshold": 0.92,
+    "enable_emotional_tone": true,
+    "tone_presets": ["professional", "friendly", "formal", "creative", "technical"]
+  },
+
+  "providers": {
+    "openai": {
+      "enabled": true,
+      "api_key_env": "OPENAI_API_KEY",
+      "models": {
+        "gpt4o": {
+          "name": "gpt-4o",
+          "type": "llm",
+          "max_tokens": 128000,
+          "context_window": 128000,
+          "supports_streaming": true,
+          "cost_per_1k_input": 0.005,
+          "cost_per_1k_output": 0.015,
+          "use_for": ["copywriting", "editing", "proofreading", "client_communication"]
+        },
+        "whisper_large_v3": {
+          "name": "whisper-1",
+          "type": "speech_to_text",
+          "supported_languages": ["en", "ru", "es", "fr", "de", "zh", "ja", "ko", "ar", "pt"],
+          "accuracy_level": "high",
+          "use_for": ["transcription"]
+        }
+      }
+    },
+    "anthropic": {
+      "enabled": true,
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "models": {
+        "claude_3_5_sonnet": {
+          "name": "claude-3-5-sonnet-20241022",
+          "type": "llm",
+          "max_tokens": 200000,
+          "context_window": 200000,
+          "supports_streaming": true,
+          "cost_per_1k_input": 0.003,
+          "cost_per_1k_output": 0.015,
+          "use_for": ["copywriting", "editing", "proofreading", "decision_making"]
+        }
+      }
+    },
+    "google": {
+      "enabled": false,
+      "api_key_env": "GOOGLE_AI_API_KEY",
+      "models": {
+        "palm2": {
+          "name": "models/text-bison-001",
+          "type": "llm",
+          "max_tokens": 8192,
+          "use_for": ["translation", "copywriting"]
+        }
+      }
+    },
+    "local": {
+      "enabled": true,
+      "models": {
+        "llama3_8b_instruct": {
+          "name": "meta-llama/Llama-3.1-8B-Instruct",
+          "type": "llm",
+          "engine": "vllm",
+          "host": "http://localhost:8000",
+          "max_tokens": 8192,
+          "use_for": ["offline_copywriting", "proofreading"],
+          "requires_gpu": true
+        },
+        "nllb_200_distilled": {
+          "name": "facebook/nllb-200-distilled-600M",
+          "type": "translation",
+          "supported_languages": ["all"],
+          "min_accuracy": 0.89,
+          "use_for": ["translation"]
+        }
+      }
+    }
+  },
+
+  "task_routing": {
+    "transcription": {
+      "primary_provider": "openai",
+      "fallback_providers": ["local"],
+      "min_audio_duration_sec": 5,
+      "max_audio_duration_sec": 7200,
+      "supported_formats": ["mp3", "wav", "m4a", "ogg", "flac"],
+      "auto_punctuation": true,
+      "speaker_diarization": true
+    },
+    "translation": {
+      "primary_provider": "local",
+      "fallback_providers": ["openai", "anthropic"],
+      "preserve_formatting": true,
+      "detect_source_language": true,
+      "max_chars_per_request": 50000
+    },
+    "copywriting": {
+      "primary_provider": "anthropic",
+      "fallback_providers": ["openai", "local"],
+      "creativity_level": 0.7,
+      "plagiarism_check": true,
+      "seo_optimization": true,
+      "min_word_count": 100,
+      "max_word_count": 5000
+    },
+    "editing": {
+      "primary_provider": "openai",
+      "style_enhancement": true,
+      "clarity_score_target": 0.95
+    },
+    "proofreading": {
+      "grammar_check": true,
+      "spelling_check": true,
+      "consistency_check": true,
+      "use_specialized_rules": ["academic", "business", "creative"]
+    }
+  },
+
+  "security": {
+    "mask_pii_in_logs": true,
+    "encrypt_intermediate_results": true,
+    "allow_external_api_calls": true,
+    "allowed_domains": ["api.openai.com", "api.anthropic.com", "localhost"]
+  },
+
+  "performance": {
+    "enable_batch_processing": true,
+    "max_concurrent_tasks": 10,
+    "adaptive_timeout": true,
+    "low_priority_queue_max_wait_minutes": 30
+  }
+}

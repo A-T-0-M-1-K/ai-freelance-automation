@@ -1,0 +1,129 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/ai_config.schema.json",
+  "version": "1.0.0",
+  "description": "AI configuration for autonomous freelance operations",
+  "providers": {
+    "openai": {
+      "enabled": true,
+      "api_key_ref": "OPENAI_API_KEY",
+      "models": {
+        "gpt4": {
+          "name": "gpt-4-turbo",
+          "max_tokens": 128000,
+          "temperature": 0.3,
+          "use_for": ["copywriting", "client_communication", "decision_making"]
+        },
+        "whisper": {
+          "name": "whisper-1",
+          "use_for": ["transcription"]
+        }
+      },
+      "rate_limits": {
+        "requests_per_minute": 500,
+        "tokens_per_minute": 1000000
+      }
+    },
+    "anthropic": {
+      "enabled": true,
+      "api_key_ref": "ANTHROPIC_API_KEY",
+      "models": {
+        "claude3_opus": {
+          "name": "claude-3-opus-20240229",
+          "max_tokens": 200000,
+          "temperature": 0.2,
+          "use_for": ["copywriting", "editing", "proofreading"]
+        }
+      },
+      "rate_limits": {
+        "requests_per_minute": 300,
+        "tokens_per_minute": 800000
+      }
+    },
+    "google_ai": {
+      "enabled": false,
+      "api_key_ref": "GOOGLE_AI_API_KEY",
+      "models": {
+        "palm2": {
+          "name": "models/text-bison-001",
+          "temperature": 0.4,
+          "use_for": ["translation", "content_generation"]
+        }
+      }
+    },
+    "local": {
+      "enabled": true,
+      "models": {
+        "llama3_8b": {
+          "path": "models/llama3-8b-instruct.Q5_K_M.gguf",
+          "backend": "llama-cpp-python",
+          "max_tokens": 8192,
+          "temperature": 0.5,
+          "use_for": ["offline_copywriting", "fallback_communication"]
+        },
+        "nllb_translator": {
+          "path": "models/nllb-200-distilled-600M",
+          "backend": "transformers",
+          "use_for": ["translation"],
+          "supported_languages": ["eng_Latn", "rus_Cyrl", "fra_Latn", "deu_Latn", "spa_Latn", "zho_Hans", "jpn_Jpan", "kor_Hang"]
+        },
+        "whisper_local": {
+          "path": "models/whisper-large-v3",
+          "backend": "transformers",
+          "use_for": ["transcription"],
+          "device": "cuda"
+        }
+      }
+    }
+  },
+  "task_routing": {
+    "transcription": {
+      "primary_provider": "openai",
+      "fallback_providers": ["local"],
+      "quality_threshold": 0.95,
+      "max_duration_minutes": 120
+    },
+    "translation": {
+      "primary_provider": "local",
+      "fallback_providers": ["openai", "anthropic"],
+      "preserve_formatting": true,
+      "detect_language": true
+    },
+    "copywriting": {
+      "primary_provider": "anthropic",
+      "fallback_providers": ["openai", "local"],
+      "creativity_level": "balanced",
+      "plagiarism_check": true
+    },
+    "editing": {
+      "primary_provider": "anthropic",
+      "tone_preservation": true
+    },
+    "proofreading": {
+      "grammar_engine": "language-tool-plus",
+      "style_guide": "professional"
+    }
+  },
+  "continuous_learning": {
+    "enabled": true,
+    "feedback_loop": true,
+    "store_successful_outputs": true,
+    "fine_tune_interval_hours": 168,
+    "min_samples_for_finetune": 500
+  },
+  "caching": {
+    "enable_inference_cache": true,
+    "cache_ttl_seconds": 3600,
+    "max_cache_size_gb": 10
+  },
+  "safety": {
+    "content_filtering": true,
+    "block_sensitive_topics": ["politics", "hate_speech", "illegal_activities"],
+    "client_data_isolation": true
+  },
+  "performance": {
+    "concurrent_inferences": 8,
+    "timeout_seconds": 120,
+    "retry_on_failure": 3,
+    "use_gpu_if_available": true
+  }
+}

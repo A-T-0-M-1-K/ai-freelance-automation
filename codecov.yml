@@ -1,0 +1,122 @@
+# codecov.yml
+# Code Coverage Configuration for AI_FREELANCE_AUTOMATION
+# Ensures industrial-grade test coverage aligned with 99.9% uptime SLA
+
+codecov:
+  # Require CI status to pass before merging
+  require_ci_to_pass: true
+  # Notify only on significant changes
+  notify:
+    after_n_builds: 1
+    wait_for_ci: true
+
+coverage:
+  # Global coverage policy
+  range: 70..100
+  round: down
+  precision: 2
+
+  status:
+    project:
+      default:
+        # Enforce minimum coverage across entire project
+        target: 85%
+        threshold: 1%
+        base: auto
+        informational: false
+
+    patch:
+      default:
+        # New code must be well-tested
+        target: 90%
+        threshold: 2%
+
+    changes:
+      default:
+        # Fail if coverage drops in modified files
+        enabled: true
+
+  # Per-component coverage requirements
+  notify:
+    slack:
+      default:
+        url: "https://hooks.slack.com/services/..."  # Optional: replace with real hook
+        branches:
+          - main
+          - develop
+
+# File-specific rules
+ignore:
+  # Non-code and generated files
+  - "*.txt"
+  - "*.md"
+  - "*.yml"
+  - "*.yaml"
+  - "*.json"
+  - "*.cfg"
+  - "*.ini"
+  - "logs/**/*"
+  - "docs/**/*"
+  - "dist/**/*"
+  - "build/**/*"
+  - "__pycache__/**/*"
+  - "*.pyc"
+  - "*.so"
+  - "*.dll"
+  - "*.exe"
+
+  # Security-sensitive or non-testable
+  - "core/security/key_manager.py"            # Key handling logic often untestable in CI
+  - "core/security/advanced_crypto_system.py" # Hardware-bound crypto may skip coverage
+  - "secrets/**/*"
+  - "env/**/*"
+  - ".env*"
+
+  # Auto-generated or plugin stubs
+  - "plugins/**/stubs/**/*"
+  - "plugins/**/generated/**/*"
+
+  # UI (frontend) — covered by separate tests
+  - "ui/frontend/**/*"
+  - "ui/assets/**/*"
+
+# Component-specific overrides
+flags:
+  core:
+    paths:
+      - "core/"
+    carryforward: true
+    status:
+      project:
+        target: 95%   # Core must be extremely well-tested
+  services:
+    paths:
+      - "services/"
+    carryforward: true
+    status:
+      project:
+        target: 90%
+  ai_models:
+    paths:
+      - "ai/models/"
+      - "core/ai_engine/"
+    carryforward: true
+    status:
+      project:
+        target: 88%   # AI inference may have stochastic elements
+  plugins:
+    paths:
+      - "plugins/"
+    carryforward: true
+    status:
+      project:
+        target: 80%   # Plugins may be third-party
+
+# Pull request comments
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true
+  branches:
+    - main
+    - develop

@@ -1,0 +1,23 @@
+Hello{{ if client_name }}, {{ client_name }}{{ endif }}!
+
+Thank you for your interest in my services and for the opportunity to collaborate on your project: "{{ project_title }}".
+
+I appreciate your proposed terms. After carefully reviewing the scope, timeline, and deliverables, I’d like to propose a slight adjustment to ensure the highest quality outcome while meeting your expectations:
+
+- **Revised Price**: {{ proposed_price }} {{ currency }}
+- **Delivery Time**: {{ delivery_time_days }} day{{ 's' if delivery_time_days != 1 else '' }}
+- **Included Revisions**: {{ included_revisions }} free revision{{ 's' if included_revisions != 1 else '' }}
+
+This pricing reflects the complexity of the task ({{ service_type }}), required expertise, and my commitment to delivering professional-grade results on time.
+
+However, I’m open to discussion! If your budget is fixed at {{ client_budget }} {{ currency }}, I could consider:
+- Reducing the scope (e.g., fewer words, simpler formatting),
+- Extending the deadline by {{ extra_days }} days,
+- Or offering a phased delivery.
+
+Please let me know what works best for you. I’m confident we can find a mutually beneficial arrangement.
+
+Looking forward to your response!
+
+Best regards,
+{{ freelancer_name }}

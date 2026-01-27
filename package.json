@@ -1,0 +1,71 @@
+{
+  "name": "ai-freelance-automation",
+  "version": "1.0.0",
+  "description": "Fully autonomous AI freelancer system that replaces humans on freelance platforms. Handles job search, bidding, communication, task execution, quality control, delivery, and payment — all without human intervention.",
+  "main": "ui/dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"cd ui && npm run dev\" \"cd . && python -m uvicorn api.main:app --reload\"",
+    "build": "cd ui && npm run build",
+    "test": "npm run test:ui && pytest tests/ --tb=short",
+    "test:ui": "cd ui && npm run test",
+    "lint": "eslint ui/src --ext .js,.jsx,.ts,.tsx && black . --check && ruff check .",
+    "format": "prettier --write ui/src && black . && isort .",
+    "start:electron": "electron .",
+    "docs": "typedoc --out docs/api ui/src/types.ts",
+    "health-check": "node scripts/health-check.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-freelance-automation/core.git"
+  },
+  "keywords": [
+    "ai",
+    "freelance",
+    "automation",
+    "autonomous-agent",
+    "upwork",
+    "fiverr",
+    "transcription",
+    "translation",
+    "copywriting",
+    "self-healing",
+    "self-learning"
+  ],
+  "author": "Autonomous AI Systems <ai@freelance-automation.system>",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/ai-freelance-automation/core/issues"
+  },
+  "homepage": "https://freelance-automation.system",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "socket.io-client": "^4.7.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "mobx": "^6.12.0",
+    "chart.js": "^4.4.0",
+    "date-fns": "^2.30.0",
+    "i18next": "^23.7.0",
+    "react-i18next": "^13.5.0"
+  },
+  "devDependencies": {
+    "vite": "^4.5.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.2.2",
+    "electron": "^27.0.0",
+    "typedoc": "^0.25.0",
+    "@types/react": "^18.2.37",
+    "@types/node": "^20.9.0"
+  },
+  "private": true,
+  "workspaces": [
+    "ui/",
+    "scripts/"
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "./schemas/deploy.schema.json",
+  "version": "1.0.0",
+  "environment": "production",
+  "deployment": {
+    "strategy": "rolling-update",
+    "replicas": {
+      "core": 2,
+      "ai_workers": 4,
+      "platform_agents": 3,
+      "monitoring": 1
+    },
+    "auto_scaling": {
+      "enabled": true,
+      "min_replicas": 1,
+      "max_replicas": 10,
+      "cpu_threshold_percent": 70,
+      "memory_threshold_mb": 8192,
+      "queue_length_threshold": 50
+    }
+  },
+  "infrastructure": {
+    "compute": {
+      "type": "hybrid",
+      "cloud_providers": ["aws", "gcp"],
+      "on_prem_enabled": false,
+      "gpu_required": true,
+      "gpu_type": "nvidia-tesla-t4",
+      "min_cpu_cores": 8,
+      "min_ram_gb": 32,
+      "disk_type": "ssd",
+      "min_disk_gb": 500
+    },
+    "network": {
+      "ssl_enabled": true,
+      "tls_version": "1.3",
+      "rate_limiting": {
+        "enabled": true,
+        "requests_per_minute": 300,
+        "burst": 50
+      },
+      "ddos_protection": true,
+      "ip_whitelist": []
+    }
+  },
+  "containerization": {
+    "docker_enabled": true,
+    "image_registry": "ghcr.io/your-org/ai-freelance-automation",
+    "base_image_tag": "python:3.11-slim",
+    "build_args": {
+      "INSTALL_GPU_DEPS": "true",
+      "ENABLE_MONITORING": "true"
+    },
+    "health_check": {
+      "endpoint": "/healthz",
+      "interval_seconds": 10,
+      "timeout_seconds": 5,
+      "retries": 3
+    }
+  },
+  "secrets_management": {
+    "provider": "hashicorp_vault",
+    "vault_addr": "https://vault.internal:8200",
+    "mount_point": "secret/ai-freelance/",
+    "fallback_to_env": false
+  },
+  "backup_and_recovery": {
+    "backup_enabled": true,
+    "backup_interval_hours": 6,
+    "retention_days": 30,
+    "offsite_backup": true,
+    "encryption_at_rest": true,
+    "point_in_time_recovery": true
+  },
+  "observability": {
+    "logs": {
+      "level": "INFO",
+      "destination": ["file", "loki", "stdout"],
+      "structured": true,
+      "redact_sensitive": true
+    },
+    "metrics": {
+      "enabled": true,
+      "push_gateway": "http://prometheus-pushgateway:9091",
+      "scrape_interval_seconds": 15
+    },
+    "tracing": {
+      "enabled": true,
+      "provider": "jaeger",
+      "endpoint": "http://jaeger-collector:14268/api/traces"
+    }
+  },
+  "compliance": {
+    "gdpr_compliant": true,
+    "pci_dss_compliant": true,
+    "hipaa_compliant": false,
+    "soc2_ready": true,
+    "data_residency": ["eu-west-1", "us-east-1"]
+  },
+  "update_policy": {
+    "auto_update": true,
+    "update_window": {
+      "start": "02:00",
+      "end": "04:00",
+      "timezone": "UTC"
+    },
+    "rollback_on_failure": true,
+    "require_manual_approval": false
+  }
+}

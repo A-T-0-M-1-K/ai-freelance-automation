@@ -1,0 +1,89 @@
+{
+  "system": {
+    "version": "1.0.0",
+    "environment": "production",
+    "log_level": "INFO",
+    "max_concurrent_jobs": 50,
+    "health_check_interval_sec": 60,
+    "emergency_recovery_enabled": true,
+    "self_healing_timeout_sec": 300,
+    "uptime_target_percent": 99.9
+  },
+  "ai": {
+    "models": {
+      "transcription": "whisper-large-v3",
+      "translation": "nllb-200-distilled-1.3B",
+      "copywriting": "gpt-4o",
+      "proofreading": "claude-3.5-sonnet"
+    },
+    "fallback_model": "local-llama-3-8b",
+    "inference_timeout_sec": 120,
+    "quality_threshold": 0.95,
+    "continuous_learning_enabled": true,
+    "model_cache_size_gb": 20
+  },
+  "platforms": {
+    "enabled": ["upwork", "freelancer", "fiverr", "kwork"],
+    "scrape_interval_minutes": 5,
+    "bid_success_rate_target": 0.3,
+    "auto_reject_low_budget": true,
+    "min_budget_usd": 20
+  },
+  "communication": {
+    "supported_languages": ["en", "ru", "es", "fr", "de", "pt", "zh", "ja", "ar", "hi"],
+    "default_language": "en",
+    "response_time_max_minutes": 30,
+    "sentiment_analysis_enabled": true,
+    "emotional_intelligence_level": "adaptive"
+  },
+  "payment": {
+    "providers": ["stripe", "paypal", "yoomoney", "crypto_btc_eth", "bank_transfer"],
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_hours": [24, 48, 72],
+    "fraud_detection_sensitivity": "high",
+    "tax_calculation_enabled": true,
+    "default_currency": "USD"
+  },
+  "security": {
+    "encryption_algorithm": "AES-256-GCM",
+    "key_rotation_days": 90,
+    "password_hash_algorithm": "Argon2id",
+    "hmac_algorithm": "HMAC-SHA256",
+    "audit_log_retention_days": 365,
+    "anomaly_detection_enabled": true,
+    "gdpr_compliance_mode": true,
+    "pci_dss_mode": true
+  },
+  "monitoring": {
+    "metrics_collection_enabled": true,
+    "ml_anomaly_detection": true,
+    "alert_channels": ["email", "webhook", "internal_log"],
+    "report_schedule": {
+      "daily": "06:00",
+      "weekly": "monday_07:00",
+      "monthly": "1st_08:00"
+    },
+    "prometheus_enabled": true,
+    "grafana_dashboard_url": "http://localhost:3000/d/ai-freelance"
+  },
+  "scaling": {
+    "auto_scaling_enabled": true,
+    "min_workers": 2,
+    "max_workers": 20,
+    "scale_up_cpu_threshold_percent": 70,
+    "scale_down_cpu_threshold_percent": 30,
+    "gpu_required_for_ai": true
+  },
+  "paths": {
+    "logs_dir": "logs/",
+    "cache_dir": "cache/",
+    "backups_dir": "backups/",
+    "plugins_dir": "plugins/",
+    "temp_dir": "tmp/"
+  },
+  "plugins": {
+    "hot_reload_enabled": true,
+    "sandbox_mode": true,
+    "validation_on_load": true
+  }
+}

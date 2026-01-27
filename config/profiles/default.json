@@ -1,0 +1,138 @@
+{
+  "version": "1.0.0",
+  "profile_name": "default",
+  "description": "Default configuration profile for AI Freelance Automation System",
+
+  "system": {
+    "autonomous_mode": true,
+    "max_concurrent_jobs": 50,
+    "max_active_clients": 100,
+    "emergency_stop_on_critical_failure": true,
+    "self_healing_enabled": true,
+    "self_learning_enabled": true,
+    "log_level": "INFO",
+    "log_retention_days": 30,
+    "metrics_collection_enabled": true,
+    "anomaly_detection_sensitivity": "medium"
+  },
+
+  "ai": {
+    "models": {
+      "transcription": "whisper-large-v3",
+      "translation": "nllb-200-distilled-1.3B",
+      "copywriting": "gpt-4o-mini",
+      "proofreading": "claude-3-haiku",
+      "sentiment_analysis": "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    },
+    "fallback_models": {
+      "transcription": ["whisper-base", "local-whisper-medium"],
+      "translation": ["m2m100_418M", "opus-mt"],
+      "copywriting": ["llama-3-8b-instruct", "phi-3-mini"]
+    },
+    "quality_threshold": 0.92,
+    "auto_optimize_models": true,
+    "cache_inference_results": true,
+    "max_retries_on_ai_failure": 3
+  },
+
+  "automation": {
+    "job_scan_interval_minutes": 5,
+    "bid_success_rate_target": 0.35,
+    "min_profit_margin_percent": 20,
+    "auto_accept_orders": true,
+    "auto_negotiate": true,
+    "max_bid_attempts_per_job": 2,
+    "workflow_timeout_hours": 72,
+    "quality_control_passes": 2
+  },
+
+  "platforms": {
+    "enabled": ["upwork", "freelancer", "kwork", "fiverr"],
+    "upwork": {
+      "api_enabled": true,
+      "scraping_fallback": false,
+      "max_daily_bids": 15
+    },
+    "freelancer": {
+      "api_enabled": false,
+      "scraping_fallback": true,
+      "respect_robots_txt": true
+    },
+    "kwork": {
+      "api_enabled": true,
+      "auto_update_gigs": true
+    },
+    "fiverr": {
+      "api_enabled": true,
+      "auto_response_delay_sec": [10, 30]
+    }
+  },
+
+  "communication": {
+    "languages_supported": ["en", "ru", "es", "fr", "de", "pt", "zh", "ar"],
+    "default_language": "en",
+    "emotional_intelligence_level": "adaptive",
+    "response_time_max_minutes": 60,
+    "auto_follow_up_enabled": true,
+    "client_satisfaction_tracking": true
+  },
+
+  "payment": {
+    "providers_enabled": ["stripe", "paypal", "yoomoney", "crypto"],
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_schedule_hours": [24, 48, 72],
+    "fraud_detection_threshold": 0.85,
+    "tax_calculation_enabled": true,
+    "default_currency": "USD",
+    "crypto_currencies_accepted": ["BTC", "ETH", "USDT"]
+  },
+
+  "security": {
+    "encryption_algorithm": "AES-256-GCM",
+    "key_rotation_days": 90,
+    "password_hashing": "argon2id",
+    "audit_logging_enabled": true,
+    "rate_limit_requests_per_minute": 100,
+    "ddos_protection_enabled": true,
+    "input_sanitization_level": "strict"
+  },
+
+  "monitoring": {
+    "metrics_interval_sec": 10,
+    "alert_on_cpu_over_percent": 90,
+    "alert_on_memory_over_percent": 85,
+    "predictive_maintenance_enabled": true,
+    "reporting_schedule": {
+      "daily": "08:00",
+      "weekly": "monday 09:00",
+      "monthly": "1st 10:00"
+    }
+  },
+
+  "scaling": {
+    "auto_scale_enabled": true,
+    "min_workers": 2,
+    "max_workers": 20,
+    "scale_up_threshold_cpu_percent": 70,
+    "scale_down_threshold_cpu_percent": 30,
+    "gpu_offload_enabled": true
+  },
+
+  "paths": {
+    "logs_dir": "logs/app",
+    "backups_dir": "data/backups",
+    "cache_dir": "data/cache",
+    "models_dir": "data/models",
+    "temp_dir": "data/temp",
+    "plugins_dir": "plugins",
+    "schemas_dir": "config/schemas"
+  },
+
+  "compliance": {
+    "gdpr_enabled": true,
+    "pci_dss_enabled": true,
+    "hipaa_compliant_mode": false,
+    "data_minimization": true,
+    "right_to_be_forgotten": true
+  }
+}

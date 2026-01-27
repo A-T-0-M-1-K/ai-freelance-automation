@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/ai_config.schema.json",
+  "title": "AI Configuration Schema",
+  "description": "Configuration schema for all AI models and inference services used in the autonomous freelance system.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Globally enable or disable AI subsystem.",
+      "default": true
+    },
+    "model_providers": {
+      "type": "object",
+      "description": "Configuration for supported AI providers.",
+      "properties": {
+        "openai": {
+          "$ref": "#/$defs/provider_config"
+        },
+        "anthropic": {
+          "$ref": "#/$defs/provider_config"
+        },
+        "google_ai": {
+          "$ref": "#/$defs/provider_config"
+        },
+        "local_models": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "model_paths": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "Mapping of task types (e.g., 'transcription', 'translation') to local model file paths."
+            },
+            "device": {
+              "type": "string",
+              "enum": ["cpu", "cuda", "mps"],
+              "default": "cpu"
+            },
+            "quantization": {
+              "type": "string",
+              "enum": ["none", "int8", "int4", "fp16"],
+              "default": "none"
+            }
+          },
+          "required": ["enabled"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "task_routing": {
+      "type": "object",
+      "description": "Defines which AI provider/model handles each task type.",
+      "properties": {
+        "transcription": { "$ref": "#/$defs/task_config" },
+        "translation": { "$ref": "#/$defs/task_config" },
+        "copywriting": { "$ref": "#/$defs/task_config" },
+        "editing": { "$ref": "#/$defs/task_config" },
+        "proofreading": { "$ref": "#/$defs/task_config" },
+        "dialogue": { "$ref": "#/$defs/task_config" },
+        "decision_making": { "$ref": "#/$defs/task_config" }
+      },
+      "required": [
+        "transcription",
+        "translation",
+        "copywriting",
+        "editing",
+        "proofreading",
+        "dialogue",
+        "decision_making"
+      ],
+      "additionalProperties": false
+    },
+    "inference": {
+      "type": "object",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 3
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 300
+        },
+        "fallback_chain": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["openai", "anthropic", "google_ai", "local_models"]
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered list of providers to fall back to on failure."
+        },
+        "cache_results": {
+          "type": "boolean",
+          "default": true
+        },
+        "quality_threshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.85,
+          "description": "Minimum confidence score to accept AI output without human-like review simulation."
+        }
+      },
+      "required": ["max_retries", "timeout_seconds", "fallback_chain"]
+    },
+    "continuous_learning": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "feedback_window_hours": { "type": "integer", "minimum": 1, "default": 168 },
+        "auto_finetune": { "type": "boolean", "default": false },
+        "data_retention_days": { "type": "integer", "minimum": 1, "default": 90 }
+      },
+      "required": ["enabled"]
+    }
+  },
+  "required": ["enabled", "model_providers", "task_routing", "inference"],
+  "$defs": {
+    "provider_config": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "api_key_env_var": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
+        "base_url": { "type": "string", "format": "uri" },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "max_tokens": { "type": "integer", "minimum": 1 },
+              "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 },
+              "top_p": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+            },
+            "required": ["name"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["enabled", "api_key_env_var"],
+      "additionalProperties": false
+    },
+    "task_config": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "google_ai", "local_models"]
+        },
+        "model": { "type": "string" },
+        "use_streaming": { "type": "boolean", "default": false },
+        "custom_prompt_template": { "type": "string" }
+      },
+      "required": ["provider", "model"],
+      "additionalProperties": false
+    }
+  }
+}

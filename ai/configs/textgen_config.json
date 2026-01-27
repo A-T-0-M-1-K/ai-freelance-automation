@@ -1,0 +1,123 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/textgen.schema.json",
+  "metadata": {
+    "version": "1.4.2",
+    "last_updated": "2026-01-25T00:00:00Z",
+    "description": "Configuration for AI-powered text generation across all freelance tasks (copywriting, client communication, bidding, reporting).",
+    "owner": "AI Freelance Automation Core Team",
+    "environment": "${ENV:PRODUCTION}"
+  },
+  "model_selection": {
+    "primary_models": [
+      {
+        "provider": "openai",
+        "model_id": "gpt-4o-2025-08-06",
+        "enabled": true,
+        "priority": 10,
+        "max_tokens": 16384,
+        "context_window": 128000
+      },
+      {
+        "provider": "anthropic",
+        "model_id": "claude-3-5-sonnet-20260120",
+        "enabled": true,
+        "priority": 9,
+        "max_tokens": 8192,
+        "context_window": 200000
+      },
+      {
+        "provider": "local",
+        "model_id": "llama-3.1-70b-instruct-q5_K_M",
+        "enabled": false,
+        "priority": 5,
+        "max_tokens": 8192,
+        "context_window": 32768,
+        "endpoint": "http://localhost:8080/v1"
+      }
+    ],
+    "fallback_strategy": "cascade",
+    "auto_switch_on_failure": true,
+    "min_quality_threshold": 0.85
+  },
+  "generation_policies": {
+    "default": {
+      "temperature": 0.4,
+      "top_p": 0.9,
+      "frequency_penalty": 0.1,
+      "presence_penalty": 0.0,
+      "max_retries": 3,
+      "timeout_seconds": 120,
+      "streaming_enabled": true
+    },
+    "client_communication": {
+      "temperature": 0.3,
+      "top_p": 0.85,
+      "tone": "professional_empathetic",
+      "forbid_marketing_jargon": true,
+      "require_clarity_score": 0.9
+    },
+    "bid_proposal": {
+      "temperature": 0.5,
+      "top_p": 0.9,
+      "emphasize_uniqueness": true,
+      "include_portfolio_snippets": true,
+      "max_length_words": 300
+    },
+    "copywriting": {
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "style_adaptation": true,
+      "seo_optimized": true,
+      "plagiarism_check_required": true
+    },
+    "error_recovery_message": {
+      "temperature": 0.2,
+      "top_p": 0.7,
+      "tone": "apologetic_professional",
+      "include_compensation_offer": true
+    }
+  },
+  "safety_and_compliance": {
+    "content_filtering": {
+      "block_categories": ["violence", "hate", "sexual", "self-harm", "illegal"],
+      "custom_blacklist": ["spammy phrases", "overpromising guarantees"]
+    },
+    "pii_redaction": true,
+    "gdpr_compliant_output": true,
+    "output_watermarking": {
+      "enabled": true,
+      "method": "invisible_semantic_hash",
+      "key_id": "wm-key-2026-q1"
+    }
+  },
+  "quality_control": {
+    "auto_evaluation": true,
+    "metrics": ["coherence", "relevance", "fluency", "client_alignment"],
+    "min_acceptable_score": 0.88,
+    "human_in_the_loop_threshold": 0.75,
+    "feedback_loop_enabled": true
+  },
+  "caching": {
+    "enable_response_cache": true,
+    "cache_ttl_seconds": 3600,
+    "cache_key_includes": ["prompt_hash", "client_id", "task_type", "language"]
+  },
+  "multilingual": {
+    "supported_languages": [
+      "en", "ru", "es", "fr", "de", "pt", "it", "nl", "pl", "tr", "ar", "zh", "ja", "ko"
+    ],
+    "auto_detect_language": true,
+    "translation_fallback_enabled": true
+  },
+  "observability": {
+    "log_prompt_and_response": false,
+    "log_token_usage": true,
+    "emit_metrics_to": ["prometheus", "internal_analytics"],
+    "trace_id_header": "X-AI-Freelance-Trace-ID"
+  },
+  "dynamic_adjustment": {
+    "enable_runtime_tuning": true,
+    "adjust_based_on": ["client_satisfaction", "task_complexity", "deadline_pressure"],
+    "learning_rate": 0.05
+  }
+}

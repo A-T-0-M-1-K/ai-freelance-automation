@@ -1,0 +1,81 @@
+{
+  "$schema": "https://ai-freelance-automation.com/schemas/project_template_v1.json",
+  "template_type": "transcription",
+  "version": "1.2.0",
+  "description": "Project template for audio/video transcription tasks with AI quality control and client reporting",
+
+  "metadata": {
+    "created_by": "system",
+    "created_at_iso8601": "2026-01-26T00:00:00Z",
+    "compatible_services": ["transcription_service", "editing_service", "proofreading_service"],
+    "required_ai_models": ["whisper-large-v3", "punctuation-restoration-model", "speaker-diarization-model"]
+  },
+
+  "input_spec": {
+    "allowed_formats": ["mp3", "wav", "m4a", "mp4", "mov", "webm"],
+    "max_file_size_mb": 500,
+    "supports_multiple_files": true,
+    "requires_language_hint": true,
+    "supports_diarization": true,
+    "supports_timestamps": true
+  },
+
+  "processing_config": {
+    "default_language": "auto",
+    "fallback_language": "en",
+    "enable_speaker_diarization": true,
+    "output_format": "srt",
+    "alternative_formats": ["txt", "vtt", "docx", "json"],
+    "preserve_pauses": false,
+    "normalize_audio": true,
+    "remove_background_noise": true,
+    "confidence_threshold": 0.75,
+    "retry_on_low_confidence": true,
+    "max_retries": 3
+  },
+
+  "quality_control": {
+    "auto_proofread": true,
+    "grammar_check": true,
+    "consistency_check": true,
+    "manual_review_threshold": 0.6,
+    "min_word_count": 50,
+    "max_error_rate_percent": 2.0
+  },
+
+  "client_requirements": {
+    "must_include_timestamps": false,
+    "must_identify_speakers": false,
+    "preferred_output_format": "txt",
+    "special_instructions_placeholder": "{{client_special_instructions}}",
+    "deadline_buffer_minutes": 60
+  },
+
+  "reporting": {
+    "intermediate_reports": [
+      {
+        "trigger": "after_transcription",
+        "message_template": "✅ Transcription completed ({word_count} words). Starting quality check..."
+      },
+      {
+        "trigger": "after_proofreading",
+        "message_template": "🔍 Proofreading done. Finalizing document in {{output_format}} format."
+      }
+    ],
+    "final_report_template": "📄 Your transcription is ready!\n\n- Format: {{output_format}}\n- Duration: {{media_duration_sec}} sec\n- Word count: {{word_count}}\n- Accuracy estimate: {{accuracy_percent}}%\n\nAttached: {{output_filename}}",
+    "error_notification_template": "⚠️ Issue during transcription: {{error_reason}}. Retrying (attempt {{attempt}}/{{max_retries}})."
+  },
+
+  "integration_hooks": {
+    "on_start": ["notify_client", "reserve_ai_resources"],
+    "on_success": ["generate_invoice", "request_feedback", "log_performance_metrics"],
+    "on_failure": ["escalate_to_support", "refund_if_paid", "archive_debug_data"]
+  },
+
+  "compliance": {
+    "gdpr_compliant": true,
+    "data_retention_days": 30,
+    "auto_delete_after_delivery": true,
+    "encryption_required": true
+  }
+}

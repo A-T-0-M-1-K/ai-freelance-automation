@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/automation.schema.json",
+  "title": "Automation Configuration Schema",
+  "description": "JSON Schema for validating the automation.json configuration file used by AI_FREELANCE_AUTOMATION core automation subsystem.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether the entire automation system is enabled.",
+      "default": true
+    },
+    "job_search": {
+      "type": "object",
+      "properties": {
+        "interval_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440,
+          "description": "How often (in minutes) to scan platforms for new jobs. Max: once per day (1440 min)."
+        },
+        "max_concurrent_jobs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum number of active jobs the system can handle simultaneously."
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["upwork", "freelance_ru", "kwork", "fiverr", "custom"]
+          },
+          "uniqueItems": true,
+          "description": "List of enabled freelance platforms to monitor."
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "min_budget_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_complexity_score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "required_skills": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "excluded_keywords": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["min_budget_usd", "max_complexity_score"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["interval_minutes", "max_concurrent_jobs", "platforms", "filters"],
+      "additionalProperties": false
+    },
+    "decision_engine": {
+      "type": "object",
+      "properties": {
+        "risk_tolerance": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "auto_bid": {
+          "type": "boolean"
+        },
+        "bid_strategy": {
+          "type": "string",
+          "enum": ["competitive", "premium", "budget", "adaptive"]
+        },
+        "learning_enabled": {
+          "type": "boolean",
+          "description": "Enable continuous learning from past job outcomes."
+        }
+      },
+      "required": ["risk_tolerance", "auto_bid", "bid_strategy", "learning_enabled"],
+      "additionalProperties": false
+    },
+    "communication": {
+      "type": "object",
+      "properties": {
+        "auto_respond": {
+          "type": "boolean"
+        },
+        "response_delay_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "tone": {
+          "type": "string",
+          "enum": ["professional", "friendly", "formal", "casual"]
+        },
+        "multilingual": {
+          "type": "boolean"
+        }
+      },
+      "required": ["auto_respond", "response_delay_seconds", "tone", "multilingual"],
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "parallel_tasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "quality_check": {
+          "type": "boolean"
+        },
+        "auto_revision_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "delivery_formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["txt", "docx", "pdf", "srt", "vtt", "json", "md"]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": ["parallel_tasks", "quality_check", "auto_revision_limit", "delivery_formats"],
+      "additionalProperties": false
+    },
+    "payment": {
+      "type": "object",
+      "properties": {
+        "auto_invoice": {
+          "type": "boolean"
+        },
+        "payment_reminder_hours": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "accepted_providers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["stripe", "paypal", "yoomoney", "crypto", "bank_transfer"]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": ["auto_invoice", "payment_reminder_hours", "accepted_providers"],
+      "additionalProperties": false
+    },
+    "self_healing": {
+      "type": "object",
+      "properties": {
+        "auto_restart_failed_services": {
+          "type": "boolean"
+        },
+        "max_recovery_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "log_detailed_errors": {
+          "type": "boolean"
+        }
+      },
+      "required": ["auto_restart_failed_services", "max_recovery_attempts", "log_detailed_errors"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "enabled",
+    "job_search",
+    "decision_engine",
+    "communication",
+    "execution",
+    "payment",
+    "self_healing"
+  ],
+  "additionalProperties": false
+}

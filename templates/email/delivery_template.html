@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ _('Order Delivered') }} — {{ project_title }}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f9fafb;
+      color: #1f2937;
+      line-height: 1.6;
+    }
+    .email-container {
+      max-width: 650px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .header {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: white;
+      padding: 30px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .section {
+      margin-bottom: 24px;
+    }
+    .section h2 {
+      font-size: 18px;
+      color: #374151;
+      margin-bottom: 12px;
+    }
+    .details-list {
+      padding-left: 20px;
+    }
+    .details-list li {
+      margin-bottom: 8px;
+    }
+    .attachment-box {
+      background: #f3f4f6;
+      border-left: 4px solid #4f46e5;
+      padding: 16px;
+      margin: 20px 0;
+      border-radius: 6px;
+    }
+    .button {
+      display: inline-block;
+      background: #4f46e5;
+      color: white !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px 24px;
+      color: #6b7280;
+      font-size: 14px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .footer a {
+      color: #4f46e5;
+      text-decoration: none;
+    }
+    @media (max-width: 600px) {
+      .email-container {
+        margin: 10px;
+        border-radius: 8px;
+      }
+      .header {
+        padding: 24px 16px;
+      }
+      .content {
+        padding: 24px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>{{ _('Your Order Is Ready!') }}</h1>
+    </div>
+
+    <div class="content">
+      <p>{{ _('Hello, %(client_name)s!', client_name=client_name) }}</p>
+
+      <p>{{ _('We’re pleased to inform you that your order has been successfully completed and is ready for review.') }}</p>
+
+      <div class="section">
+        <h2>{{ _('Order Details') }}</h2>
+        <ul class="details-list">
+          <li><strong>{{ _('Project Title') }}:</strong> {{ project_title }}</li>
+          <li><strong>{{ _('Order ID') }}:</strong> {{ order_id }}</li>
+          <li><strong>{{ _('Service Type') }}:</strong> {{ service_type }}</li>
+          <li><strong>{{ _('Delivery Date') }}:</strong> {{ delivery_date }}</li>
+        </ul>
+      </div>
+
+      {% if attachments %}
+      <div class="section">
+        <h2>{{ _('Deliverables') }}</h2>
+        <div class="attachment-box">
+          <p>{{ _('The following files have been attached to your order:') }}</p>
+          <ul>
+            {% for file in attachments %}
+            <li><code>{{ file.filename }}</code> ({{ file.size_human }})</li>
+            {% endfor %}
+          </ul>
+          <a href="{{ download_url }}" class="button">{{ _('Download All Files') }}</a>
+        </div>
+      </{% endif %}
+
+      <div class="section">
+        <h2>{{ _('Next Steps') }}</h2>
+        <p>{{ _('Please review the deliverables at your earliest convenience. If everything meets your expectations, we kindly ask you to:') }}</p>
+        <ul>
+          <li>{{ _('Approve the work on the platform') }}</li>
+          <li>{{ _('Leave your feedback — it helps us grow!') }}</li>
+        </ul>
+        <p>{{ _('Should you need any revisions or have questions, simply reply to this email — our AI assistant will respond instantly.') }}</p>
+      </div>
+
+      <p>{{ _('Thank you for trusting us with your project!') }}</p>
+    </div>
+
+    <div class="footer">
+      <p>
+        {{ _('Sent by AI Freelance Automation System') }}<br>
+        {{ _('Autonomous Freelancer • 100% AI-Powered • Zero Human Intervention') }}
+      </p>
+      <p>
+        <a href="{{ platform_url }}">{{ _('View on Platform') }}</a> |
+        <a href="{{ support_url }}">{{ _('Contact Support') }}</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

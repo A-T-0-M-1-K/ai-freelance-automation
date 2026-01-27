@@ -1,0 +1,85 @@
+# AI_FREELANCE_AUTOMATION - Production Dockerfile (Optimized)
+# Multi-stage, non-root, minimal, secure, and scalable
+
+# ==============================
+# STAGE 1: Dependency builder
+# ==============================
+ARG PYTHON_VERSION=3.11
+ARG USE_GPU=false
+
+# Select base image
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+# Install system deps for building C extensions
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        gcc \
+        g++ \
+        curl \
+        ca-certificates \
+        && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy dependency files
+COPY requirements.txt requirements-prod.txt ./
+RUN if [ "$USE_GPU" = "true" ]; then \
+        cp requirements-gpu.txt ./; \
+    fi
+
+# Create virtual environment and install deps
+RUN python -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    if [ "$USE_GPU" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-gpu.txt; \
+    else \
+        pip install --no-cache-dir -r requirements-prod.txt; \
+    fi
+
+# ==============================
+# STAGE 2: Runtime image
+# ==============================
+FROM python:${PYTHON_VERSION}-slim AS runtime
+
+# Install only runtime system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libpq5 \
+        ca-certificates \
+        tzdata \
+        && rm -rf /var/lib/apt/lists/*
+
+# Set timezone
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Create non-root user
+RUN groupadd --gid 1001 appuser && \
+    useradd --uid 1001 --gid 1001 --shell /bin/bash --create-home appuser
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Activate virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/opt/venv"
+
+# Copy application code (read-only)
+COPY --chown=appuser:appuser . /app
+WORKDIR /app
+
+# Drop privileges
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/healthz || exit 1
+
+# Default command
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

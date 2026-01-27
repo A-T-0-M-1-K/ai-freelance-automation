@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-freelance-automation.com/schemas/platforms.schema.json",
+  "title": "Freelance Platform Configuration Schema",
+  "description": "Validates configuration for integrated freelance platforms (Upwork, Fiverr, Kwork, etc.) with support for custom plugins.",
+  "type": "object",
+  "properties": {
+    "platforms": {
+      "type": "array",
+      "description": "List of configured freelance platforms.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "enabled", "auth", "scraping", "bidding", "communication", "contract"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique platform identifier (e.g., 'upwork', 'fiverr', 'freelance_ru'). Must match plugin name if custom.",
+            "pattern": "^[a-z0-9_]{3,32}$"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this platform is active for job scanning and bidding."
+          },
+          "plugin": {
+            "type": "string",
+            "description": "Optional path to a custom plugin module (relative to plugins/platforms/). If omitted, uses built-in adapter.",
+            "pattern": "^[a-zA-Z0-9_/]+$"
+          },
+          "auth": {
+            "type": "object",
+            "required": ["method", "credentials"],
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": ["oauth2", "api_key", "session_cookie", "custom"],
+                "description": "Authentication method used by the platform."
+              },
+              "credentials": {
+                "type": "object",
+                "description": "Encrypted credential reference or vault path. NEVER store raw secrets here.",
+                "properties": {
+                  "vault_path": {
+                    "type": "string",
+                    "description": "Path in secure key manager (e.g., 'secrets/platforms/upwork/primary')"
+                  }
+                },
+                "required": ["vault_path"],
+                "additionalProperties": false
+              },
+              "refresh_interval_minutes": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 1440,
+                "default": 60
+              }
+            },
+            "additionalProperties": false
+          },
+          "scraping": {
+            "type": "object",
+            "required": ["job_categories", "min_budget_usd", "max_competition_level"],
+            "properties": {
+              "job_categories": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["transcription", "translation", "copywriting", "editing", "proofreading", "other"]
+                },
+                "minItems": 1,
+                "description": "Job types this agent will consider."
+              },
+              "min_budget_usd": {
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "description": "Minimum acceptable job budget in USD."
+              },
+              "max_competition_level": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Max allowed competition score (1 = low, 10 = high)."
+              },
+              "scan_interval_minutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1440,
+                "default": 5
+              }
+            },
+            "additionalProperties": false
+          },
+          "bidding": {
+            "type": "object",
+            "required": ["auto_bid", "pricing_strategy", "proposal_template_id"],
+            "properties": {
+              "auto_bid": {
+                "type": "boolean"
+              },
+              "pricing_strategy": {
+                "type": "string",
+                "enum": ["fixed_low", "fixed_medium", "fixed_high", "dynamic_ai", "hourly"],
+                "description": "How the system sets price."
+              },
+              "proposal_template_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{4,64}$",
+                "description": "ID of AI prompt template for bid generation."
+              },
+              "max_bids_per_day": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000,
+                "default": 50
+              }
+            },
+            "additionalProperties": false
+          },
+          "communication": {
+            "type": "object",
+            "properties": {
+              "auto_reply": {
+                "type": "boolean",
+                "default": true
+              },
+              "response_delay_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3600,
+                "default": 120
+              },
+              "sentiment_analysis_enabled": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "contract": {
+            "type": "object",
+            "properties": {
+              "auto_accept_offers": {
+                "type": "boolean",
+                "default": true
+              },
+              "require_milestone_payment": {
+                "type": "boolean",
+                "default": true
+              },
+              "max_delivery_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 90,
+                "default": 7
+              }
+            },
+            "additionalProperties": false
+          },
+          "rate_limits": {
+            "type": "object",
+            "properties": {
+              "requests_per_minute": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "concurrent_connections": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["platforms"],
+  "additionalProperties": false
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/database.schema.json",
+  "title": "Database Configuration Schema",
+  "description": "Validates database configuration for AI Freelance Automation System. Supports PostgreSQL, MongoDB, Redis, and SQLite with security and failover options.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether database functionality is enabled."
+    },
+    "primary": {
+      "$ref": "#/$defs/databaseConnection"
+    },
+    "replicas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/databaseConnection"
+      },
+      "minItems": 0,
+      "maxItems": 10,
+      "description": "Read replicas for load balancing and high availability."
+    },
+    "encryption": {
+      "type": "object",
+      "properties": {
+        "at_rest": {
+          "type": "boolean",
+          "description": "Enable transparent data encryption at rest."
+        },
+        "in_transit": {
+          "type": "boolean",
+          "description": "Enforce TLS for all connections."
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]{8,64}$",
+          "description": "Reference to encryption key in KeyManager."
+        }
+      },
+      "required": ["at_rest", "in_transit"],
+      "additionalProperties": false
+    },
+    "connection_pool": {
+      "type": "object",
+      "properties": {
+        "min_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "max_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        }
+      },
+      "required": ["min_size", "max_size", "timeout_seconds"],
+      "additionalProperties": false
+    },
+    "failover": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "retry_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "retry_delay_seconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 60
+        }
+      },
+      "required": ["enabled", "retry_attempts", "retry_delay_seconds"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["enabled", "primary", "encryption", "connection_pool", "failover"],
+  "additionalProperties": false,
+  "$defs": {
+    "databaseConnection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["postgresql", "mongodb", "redis", "sqlite"]
+        },
+        "host": {
+          "type": "string",
+          "format": "hostname"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "database": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]{1,64}$"
+        },
+        "username": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-@.+]{1,128}$"
+        },
+        "password_ref": {
+          "type": "string",
+          "description": "Reference to encrypted password in secure vault (e.g., 'db_main_password')",
+          "pattern": "^[a-zA-Z0-9_\\-]{4,128}$"
+        },
+        "ssl_mode": {
+          "type": "string",
+          "enum": ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Database-specific connection parameters (e.g., 'application_name', 'authSource')."
+        }
+      },
+      "required": ["type", "host", "port", "database", "username", "password_ref", "ssl_mode"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "sqlite" } }
+          },
+          "then": {
+            "properties": {
+              "host": { "maxLength": 0 },
+              "port": { "maximum": 0 },
+              "username": { "maxLength": 0 },
+              "password_ref": { "maxLength": 0 },
+              "ssl_mode": { "const": "disable" }
+            },
+            "required": ["type", "database"]
+          }
+        }
+      ]
+    }
+  }
+}

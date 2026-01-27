@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proposal for "{{ job_title }}"</title>
+    <style>
+        /* Inline styles for maximum email client compatibility */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 650px;
+            margin: 20px auto;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .header {
+            background: linear-gradient(135deg, #4a6cf7, #2d3748);
+            color: white;
+            padding: 24px 32px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 32px;
+        }
+        .section {
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #eeeeee;
+            padding-bottom: 6px;
+        }
+        .highlight {
+            background-color: #f0f4ff;
+            padding: 16px;
+            border-left: 4px solid #4a6cf7;
+            border-radius: 4px;
+            margin: 16px 0;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 20px 32px;
+            border-top: 1px solid #eeeeee;
+            font-size: 14px;
+            color: #718096;
+            text-align: center;
+        }
+        .btn {
+            display: inline-block;
+            background: #4a6cf7;
+            color: white !important;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+            .content, .header, .footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Professional Proposal</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ client_name }},</p>
+
+            <div class="section">
+                <h2>Regarding Your Project: "{{ job_title }}"</h2>
+                <p>I’ve carefully reviewed your requirements and am confident I can deliver exceptional results on time and within scope.</p>
+            </div>
+
+            <div class="section">
+                <h2>My Approach</h2>
+                <p>{{ proposal_summary }}</p>
+            </div>
+
+            <div class="highlight">
+                <strong>Estimated Delivery:</strong> {{ delivery_date }}<br>
+                <strong>Budget:</strong> {{ currency }}{{ price }}<br>
+                <strong>Revisions Included:</strong> {{ revisions_included }}
+            </div>
+
+            <div class="section">
+                <h2>Why Choose This Service?</h2>
+                <ul>
+                    <li>✅ 98%+ accuracy in transcription/translation/copywriting (verified)</li>
+                    <li>✅ Native-level fluency in {{ target_languages|join(', ') }}</li>
+                    <li>✅ Full confidentiality & GDPR compliance</li>
+                    <li>✅ Real-time progress updates</li>
+                </ul>
+            </div>
+
+            <p>I’m ready to start immediately upon your confirmation.</p>
+
+            {% if platform_url %}
+                <a href="{{ platform_url }}" class="btn">Accept Proposal on Platform</a>
+            {% endif %}
+        </div>
+        <div class="footer">
+            <p>This message was generated autonomously by the AI Freelance Automation System.<br>
+            © {{ current_year }} AI Freelance Agent. All rights reserved.<br>
+            <em>No human intervention was involved in this communication.</em></p>
+        </div>
+    </div>
+</body>
+</html>

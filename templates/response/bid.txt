@@ -1,0 +1,27 @@
+Hello{client_name_if_present},
+
+I'm excited about your project: "{job_title}".
+
+{personalized_intro}
+
+My approach:
+• {approach_point_1}
+• {approach_point_2}
+• {approach_point_3}
+
+Why me?
+✓ {years_experience}+ years in {service_type}
+✓ 98%+ client satisfaction rate
+✓ Native-level fluency in {languages_involved}
+✓ On-time delivery guaranteed
+
+I can complete this within {estimated_delivery_time} and deliver high-quality results that meet — or exceed — your expectations.
+
+My proposed rate: {proposed_price}{currency_symbol} ({pricing_model})
+
+I'm available to start immediately and would love to discuss any details you'd like to clarify.
+
+Best regards,
+{freelancer_alias}
+— Professional Freelancer
+

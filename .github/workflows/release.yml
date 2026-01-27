@@ -1,0 +1,201 @@
+# .github/workflows/release.yml
+# Автоматический выпуск стабильных релизов с полной проверкой безопасности и документацией
+
+name: 🚀 Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'        # Только семантические теги: v1.2.3
+  workflow_dispatch:                  # Ручной запуск при необходимости
+
+permissions:
+  contents: write                   # Для создания GitHub Releases
+  id-token: write                   # Для подписи образов (если используется OIDC)
+  pull-requests: read               # Для анализа зависимостей
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false         # Не отменять текущий релиз
+
+jobs:
+  security-scan:
+    name: 🔒 Security & Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt || pip install -r requirements/prod.txt
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@v3
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+      - name: Run Bandit (security linter)
+        run: |
+          pip install bandit
+          bandit -r . -x ./tests,./venv,./.git -s B101,B301,B307,B310,B314,B320,B404,B602,B603,B604,B607
+
+  build-and-test:
+    name: 🏗️ Build & Validate
+    needs: security-scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .[dev,test]
+
+      - name: Lint code
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check --diff .
+
+      - name: Run unit & integration tests
+        run: |
+          pytest tests/ --cov=core --cov=services --cov-report=xml --verbose
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  create-release:
+    name: 📦 Create GitHub Release
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Для генерации changelog
+
+      - name: Generate changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        id: changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          configuration: |
+            {
+              "categories": [
+                { "title": "🚀 Features", "labels": ["feature", "enhancement"] },
+                { "title": "🐛 Bug Fixes", "labels": ["bug", "fix"] },
+                { "title": "🧰 Maintenance", "labels": ["chore", "ci", "docs"] },
+                { "title": "⚠️ Breaking Changes", "labels": ["breaking"] }
+              ],
+              "template": "#{{CHANGELOG}}",
+              "pr_template": "- ${{TITLE}} (PR #${{NUMBER}}) by @${{AUTHOR}}",
+              "max_pull_requests": 200
+            }
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+
+  publish-pypi:
+    name: 🐍 Publish to PyPI
+    needs: create-release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ai-freelance-automation/
+    permissions:
+      id-token: write  # Для trusted publishing (без API-токена)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          pip install --upgrade pip build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Использует OIDC — не требует PYPI_API_TOKEN при настройке доверия в PyPI
+
+  docker-publish:
+    name: 🐳 Publish Docker Image
+    needs: create-release
+    runs-on: ubuntu-latest
+    environment:
+      name: dockerhub
+      url: https://hub.docker.com/r/aifreelance/automation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: aifreelance/automation
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ endsWith(github.ref, github.event.repository.default_branch) }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

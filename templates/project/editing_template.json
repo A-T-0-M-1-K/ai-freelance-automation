@@ -1,0 +1,66 @@
+{
+  "$schema": "../../../schemas/project/editing_task_schema.json",
+  "template_version": "1.2.0",
+  "task_type": "editing",
+  "metadata": {
+    "created_by": "AI_FREELANCE_AUTOMATION",
+    "creation_date": "2026-01-26",
+    "description": "Standard template for professional text editing tasks including clarity, flow, tone adjustment, and structural improvements."
+  },
+  "input_spec": {
+    "required_fields": ["source_text", "language", "target_audience"],
+    "optional_fields": ["style_guide_url", "tone_preference", "exclude_terms", "preserve_terms", "word_limit"],
+    "accepted_formats": ["plain_text", "markdown", "docx", "pdf"]
+  },
+  "processing_rules": {
+    "quality_tiers": {
+      "basic": {
+        "actions": ["grammar_check", "spelling_correction", "punctuation_fix"],
+        "ai_model": "editing/basic-v2",
+        "max_latency_sec": 30
+      },
+      "standard": {
+        "actions": ["grammar_check", "spelling_correction", "punctuation_fix", "sentence_fluency", "redundancy_removal"],
+        "ai_model": "editing/standard-v3",
+        "max_latency_sec": 90
+      },
+      "premium": {
+        "actions": ["grammar_check", "spelling_correction", "punctuation_fix", "sentence_fluency", "redundancy_removal", "tone_alignment", "structural_optimization", "readability_enhancement", "seo_optimization"],
+        "ai_model": "editing/premium-v4",
+        "max_latency_sec": 180
+      }
+    },
+    "default_tier": "standard",
+    "auto_upgrade_conditions": {
+      "client_rating_above": 4.8,
+      "project_value_usd_above": 100,
+      "repeat_client": true
+    }
+  },
+  "output_spec": {
+    "format": "same_as_input",
+    "include_change_log": true,
+    "change_log_format": "track_changes_markdown",
+    "deliverables": [
+      "edited_text",
+      "summary_report",
+      "suggested_improvements"
+    ]
+  },
+  "communication_protocol": {
+    "initial_confirmation": "I've received your editing request and will enhance clarity, flow, and professionalism while preserving your original intent.",
+    "mid_process_update": "Editing is underway — focusing on {{focus_area}} as requested. Expected completion in {{eta_minutes}} minutes.",
+    "final_delivery": "Your edited text is ready! I've improved {{improvements}} while maintaining your voice. See the change log for details."
+  },
+  "fallback_strategy": {
+    "on_ai_failure": "escalate_to_backup_model",
+    "on_ambiguous_request": "request_clarification_with_examples",
+    "max_retries": 3
+  },
+  "compliance": {
+    "gdpr_compliant": true,
+    "data_retention_days": 7,
+    "pii_detection_enabled": true,
+    "content_filtering": ["hate_speech", "plagiarism", "confidential_data"]
+  }
+}

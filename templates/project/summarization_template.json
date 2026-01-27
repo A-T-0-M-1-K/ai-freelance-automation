@@ -1,0 +1,120 @@
+{
+  "$schema": "https://ai-freelance-automation.example/schemas/summarization_template.schema.json",
+  "template_version": "1.2.0",
+  "template_type": "project",
+  "service_type": "summarization",
+  "metadata": {
+    "created_at": "2026-01-26T00:00:00Z",
+    "author": "AI Freelance Automation System",
+    "description": "Шаблон проекта для автоматической генерации кратких, точных и контекстно-адаптированных резюме текстов любого типа.",
+    "supported_languages": ["en", "ru", "es", "fr", "de", "zh", "ja", "ar", "pt", "it"],
+    "min_input_length_chars": 500,
+    "max_input_length_chars": 200000,
+    "output_formats": ["plain_text", "markdown", "html", "structured_json"]
+  },
+  "input_spec": {
+    "required_fields": ["source_text", "target_length", "language", "style"],
+    "optional_fields": ["context", "key_points_to_preserve", "avoid_topics", "tone", "audience", "custom_instructions"]
+  },
+  "parameters": {
+    "source_text": {
+      "type": "string",
+      "description": "Исходный текст для суммаризации"
+    },
+    "target_length": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["percentage", "words", "characters", "sentences"]
+        },
+        "value": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "default": { "type": "percentage", "value": 20 }
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2}([_-][A-Z]{2})?$",
+      "default": "en"
+    },
+    "style": {
+      "type": "string",
+      "enum": ["concise", "executive", "technical", "narrative", "bullet_points", "academic", "creative"],
+      "default": "concise"
+    },
+    "tone": {
+      "type": "string",
+      "enum": ["neutral", "formal", "informal", "persuasive", "objective", "empathetic"],
+      "default": "neutral"
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["general", "expert", "student", "executive", "client", "peer"],
+      "default": "general"
+    },
+    "context": {
+      "type": "string",
+      "description": "Дополнительный контекст для улучшения качества суммаризации"
+    },
+    "key_points_to_preserve": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Список ключевых фраз или идей, которые обязательно должны быть включены"
+    },
+    "avoid_topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Темы или фразы, которые следует исключить"
+    },
+    "custom_instructions": {
+      "type": "string",
+      "description": "Произвольные инструкции от клиента"
+    }
+  },
+  "output_spec": {
+    "summary": {
+      "type": "string",
+      "description": "Сгенерированное резюме"
+    },
+    "metadata": {
+      "compression_ratio": { "type": "number" },
+      "source_language_detected": { "type": "string" },
+      "processing_time_ms": { "type": "integer" },
+      "model_used": { "type": "string" },
+      "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 }
+    },
+    "quality_metrics": {
+      "coherence": { "type": "number" },
+      "relevance": { "type": "number" },
+      "factual_consistency": { "type": "number" }
+    }
+  },
+  "quality_control": {
+    "auto_check_factual_consistency": true,
+    "require_human_review_if_confidence_below": 0.75,
+    "block_sensitive_content": true,
+    "detect_and_preserve_citations": true,
+    "validate_against_original": true
+  },
+  "pricing": {
+    "base_rate_per_1k_chars": 0.8,
+    "currency": "USD",
+    "discount_for_bulk": true,
+    "min_charge": 2.0
+  },
+  "delivery": {
+    "default_deadline_hours": 4,
+    "supports_express_delivery": true,
+    "express_multiplier": 2.5,
+    "allowed_revisions": 2
+  },
+  "compliance": {
+    "gdpr_compliant": true,
+    "data_retention_days": 30,
+    "anonymize_input": true,
+    "log_only_metadata": true
+  }
+}

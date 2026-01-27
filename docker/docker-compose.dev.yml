@@ -1,0 +1,175 @@
+# AI_FREELANCE_AUTOMATION - Docker Compose for Development
+# This file is optimized for local development with hot reload, debugging, and full stack visibility.
+
+version: '3.8'
+
+services:
+  # ----------------------------
+  # Core Application (FastAPI / ASGI)
+  # ----------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.dev
+    container_name: ai_freelance_app_dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"  # API
+      - "8001:8001"  # Debug (if needed)
+    volumes:
+      - ..:/app:rw
+      - ./nginx/ssl:/etc/nginx/ssl:rw
+    environment:
+      - ENV=development
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - AUTO_SSL_INIT=true
+    depends_on:
+      - db
+      - redis
+      - nginx
+    command: >
+      bash -c "
+        if [ ! -f /etc/nginx/ssl/cert.pem ] || [ ! -f /etc/nginx/ssl/key.pem ]; then
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/nginx/ssl/key.pem \
+            -out /etc/nginx/ssl/cert.pem \
+            -subj '/C=US/ST=Dev/L=Dev/O=AI Freelance Automation/CN=localhost';
+          chmod 600 /etc/nginx/ssl/key.pem;
+          chmod 644 /etc/nginx/ssl/cert.pem;
+        fi &&
+        python -m debugpy --listen 0.0.0.0:8001 --wait-for-client -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # ----------------------------
+  # Nginx (Reverse Proxy + HTTPS)
+  # ----------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: ai_freelance_nginx_dev
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:rw
+      - ../ui/web/static:/usr/share/nginx/html:ro
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ----------------------------
+  # PostgreSQL Database
+  # ----------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: ai_freelance_db_dev
+    environment:
+      POSTGRES_DB: ai_freelance_dev
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass123
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ../migrations:/app/migrations:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d ai_freelance_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------
+  # Redis (Caching, Queues)
+  # ----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: ai_freelance_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+
+  # ----------------------------
+  # Celery Worker (Async Tasks)
+  # ----------------------------
+  worker:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.dev
+    container_name: ai_freelance_worker_dev
+    volumes:
+      - ..:/app:rw
+    environment:
+      - ENV=development
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - db
+      - redis
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=2
+
+  # ----------------------------
+  # Prometheus (Metrics)
+  # ----------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai_freelance_prometheus_dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # ----------------------------
+  # Grafana (Dashboards)
+  # ----------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai_freelance_grafana_dev
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data_dev:/var/lib/grafana
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # ----------------------------
+  # MinIO (Local S3-compatible storage for AI files)
+  # ----------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: ai_freelance_minio_dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data_dev:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  grafana_data_dev:
+  minio_data_dev:
+
+networks:
+  default:
+    name: ai_freelance_dev_network

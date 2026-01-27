@@ -1,0 +1,74 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/embedding-config.json",
+  "metadata": {
+    "config_id": "embeddings_ru_v2_1",
+    "version": "2.1.0",
+    "language": "ru",
+    "description": "Конфигурация эмбеддинговой модели для русскоязычного контента: транскрибация, перевод, копирайтинг.",
+    "created_at": "2026-01-25T00:00:00Z",
+    "author": "AI_FREELANCE_AUTOMATION System",
+    "tags": ["russian", "embeddings", "semantic-search", "nlp"],
+    "checksum": "sha256:placeholder_for_dynamic_validation"
+  },
+  "model": {
+    "provider": "openai",
+    "name": "text-embedding-3-large",
+    "fallback_models": [
+      {
+        "provider": "local",
+        "name": "intfloat/multilingual-e5-large-instruct",
+        "device": "auto",
+        "precision": "float16"
+      },
+      {
+        "provider": "huggingface",
+        "name": "cointegrated/rubert-tiny2",
+        "device": "cpu"
+      }
+    ],
+    "dimensions": 3072,
+    "max_input_tokens": 8191,
+    "encoding_format": "float"
+  },
+  "preprocessing": {
+    "normalize_unicode": true,
+    "remove_extra_whitespace": true,
+    "lowercase": false,
+    "preserve_punctuation": true,
+    "handle_emojis": "remove",
+    "detect_language": true,
+    "min_text_length": 5,
+    "max_text_length": 8000
+  },
+  "semantic_settings": {
+    "similarity_threshold": 0.75,
+    "context_window_size": 512,
+    "use_instruction_prefix": true,
+    "instruction_prefix": "Представь, что ты профессиональный фрилансер. Создай эмбеддинг для следующего текста:"
+  },
+  "caching": {
+    "enable_cache": true,
+    "cache_ttl_seconds": 86400,
+    "max_cache_size_mb": 512,
+    "use_compression": true
+  },
+  "security": {
+    "log_inputs": false,
+    "mask_pii": true,
+    "allow_external_api": true,
+    "require_encryption_in_transit": true
+  },
+  "performance": {
+    "batch_size": 32,
+    "concurrent_requests": 8,
+    "timeout_seconds": 30,
+    "retry_on_failure": true,
+    "max_retries": 3,
+    "backoff_factor": 1.5
+  },
+  "validation_schema": {
+    "required_fields": ["text"],
+    "allowed_languages": ["ru", "en", "uk", "be"],
+    "reject_on_low_confidence": true
+  }
+}

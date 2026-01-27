@@ -1,0 +1,77 @@
+{
+  "$schema": "https://ai-freelance-automation.example.com/schemas/copywriting_template.schema.json",
+  "template_version": "1.2.0",
+  "template_type": "copywriting",
+  "metadata": {
+    "created_by": "AI_FREELANCE_AUTOMATION/core/automation/job_analyzer.py",
+    "last_updated": "2026-01-26",
+    "compatible_with": ["copywriting_service", "task_orchestrator", "quality_controller"],
+    "required_ai_models": ["textgen", "sentiment_analyzer", "tone_adjuster"]
+  },
+  "project": {
+    "title": "{{job_title}}",
+    "description": "{{job_description}}",
+    "deadline_hours": {{deadline_hours}},
+    "priority": "{{priority_level}}",
+    "language": "{{target_language}}",
+    "word_count_target": {{word_count_target}},
+    "seo_optimized": {{seo_optimized}},
+    "plagiarism_free": true,
+    "fact_checked": {{fact_checked}}
+  },
+  "content_requirements": {
+    "topic": "{{topic}}",
+    "keywords": {{keywords_array}},
+    "avoid_keywords": {{avoid_keywords_array}},
+    "tone_of_voice": "{{tone_of_voice}}",
+    "writing_style": "{{writing_style}}",
+    "target_audience": {
+      "age_range": "{{audience_age}}",
+      "geography": "{{audience_location}}",
+      "interests": {{audience_interests}},
+      "pain_points": {{audience_pain_points}}
+    },
+    "call_to_action": "{{call_to_action}}",
+    "format": "{{output_format}}"
+  },
+  "structural_guidelines": {
+    "sections": [
+      {
+        "name": "Introduction",
+        "min_length": 80,
+        "purpose": "Hook the reader and state the core value proposition"
+      },
+      {
+        "name": "Main Body",
+        "min_length": "{{main_body_min}}",
+        "subsections": "{{main_body_subsections}}"
+      },
+      {
+        "name": "Conclusion",
+        "min_length": 60,
+        "purpose": "Summarize key points and reinforce CTA"
+      }
+    ],
+    "headings_level": 2,
+    "use_bullets": {{use_bullets}},
+    "use_numbered_lists": {{use_numbered_lists}}
+  },
+  "quality_criteria": {
+    "readability_score_min": 60,
+    "grammar_errors_max": 0,
+    "passive_voice_ratio_max": 0.15,
+    "keyword_density_target": 0.02,
+    "originality_score_min": 0.98
+  },
+  "delivery": {
+    "output_file_name": "copy_{{job_id}}.{{output_format}}",
+    "supported_formats": ["txt", "md", "html", "docx"],
+    "include_metadata_header": true,
+    "auto_translate_if_needed": false
+  },
+  "revision_policy": {
+    "free_revisions": 2,
+    "max_revision_rounds": 3,
+    "revision_scope": "Content accuracy, tone alignment, structure, SEO"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "detailed": {
+      "format": "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d — %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
+    },
+    "structured": {
+      "format": "{\"timestamp\": \"%(asctime)s\", \"level\": \"%(levelname)s\", \"logger\": \"%(name)s\", \"line\": %(lineno)d, \"message\": \"%(message)s\"}",
+      "datefmt": "%Y-%m-%dT%H:%M:%SZ"
+    }
+  },
+  "handlers": {
+    "rotating_file_app": {
+      "class": "logging.handlers.TimedRotatingFileHandler",
+      "level": "INFO",
+      "formatter": "detailed",
+      "filename": "logs/app/application.log",
+      "when": "midnight",
+      "interval": 1,
+      "backupCount": 30,
+      "encoding": "utf-8",
+      "delay": false,
+      "utc": true
+    },
+    "rotating_file_ai": {
+      "class": "logging.handlers.TimedRotatingFileHandler",
+      "level": "DEBUG",
+      "formatter": "detailed",
+      "filename": "logs/ai/ai_engine.log",
+      "when": "midnight",
+      "interval": 1,
+      "backupCount": 30,
+      "encoding": "utf-8",
+      "delay": false,
+      "utc": true
+    },
+    "rotating_file_security": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "WARNING",
+      "formatter": "structured",
+      "filename": "logs/security/audit.log",
+      "maxBytes": 52428800,
+      "backupCount": 10,
+      "encoding": "utf-8"
+    },
+    "rotating_file_errors": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "ERROR",
+      "formatter": "detailed",
+      "filename": "logs/errors/critical.log",
+      "maxBytes": 104857600,
+      "backupCount": 20,
+      "encoding": "utf-8"
+    },
+    "console": {
+      "class": "logging.StreamHandler",
+      "level": "INFO",
+      "formatter": "detailed",
+      "stream": "ext://sys.stdout"
+    }
+  },
+  "loggers": {
+    "ApplicationCore": { "handlers": ["rotating_file_app", "console"], "level": "INFO", "propagate": false },
+    "DecisionEngine": { "handlers": ["rotating_file_app"], "level": "DEBUG", "propagate": false },
+    "IntelligentCommunicator": { "handlers": ["rotating_file_app"], "level": "INFO", "propagate": false },
+    "AIEngine": { "handlers": ["rotating_file_ai"], "level": "DEBUG", "propagate": false },
+    "SecuritySystem": { "handlers": ["rotating_file_security"], "level": "WARNING", "propagate": false },
+    "EmergencyRecovery": { "handlers": ["rotating_file_errors", "console"], "level": "ERROR", "propagate": false }
+  },
+  "root": {
+    "level": "INFO",
+    "handlers": ["rotating_file_app", "console"]
+  }
+}

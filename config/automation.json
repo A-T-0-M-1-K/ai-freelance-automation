@@ -1,0 +1,98 @@
+{
+  "$schema": "schemas/automation_schema.json",
+  "version": "1.0.0",
+  "enabled": true,
+
+  "job_search": {
+    "interval_minutes": 5,
+    "max_platforms": 10,
+    "platforms": ["upwork", "freelance_ru", "kwork", "fiverr"],
+    "filters": {
+      "min_budget_usd": 10,
+      "max_competition_ratio": 0.7,
+      "allowed_categories": ["transcription", "translation", "copywriting", "editing", "proofreading"],
+      "exclude_keywords": ["urgent", "ASAP", "scam", "fake", "test job", "no budget"]
+    },
+    "ml_relevance_threshold": 0.85
+  },
+
+  "decision_engine": {
+    "enable_risk_analysis": true,
+    "risk_tolerance": "medium",
+    "max_concurrent_jobs": 50,
+    "profitability_threshold_percent": 20,
+    "auto_decline_low_rating_clients": true,
+    "min_client_rating": 4.0,
+    "max_response_time_hours": 24
+  },
+
+  "bid_automation": {
+    "enable_ai_proposals": true,
+    "proposal_template_strategy": "adaptive",
+    "price_strategy": "value_based",
+    "default_markup_percent": 30,
+    "min_price_buffer_percent": 15,
+    "personalization_level": "high",
+    "avoid_duplicate_bids": true
+  },
+
+  "client_communication": {
+    "enable_autonomous_messaging": true,
+    "response_delay_seconds": {
+      "min": 60,
+      "max": 900
+    },
+    "emotional_intelligence_enabled": true,
+    "sentiment_analysis_sensitivity": "high",
+    "multilingual_support": true,
+    "supported_languages": ["en", "ru", "es", "fr", "de", "pt", "zh", "ar"],
+    "max_daily_messages_per_client": 10
+  },
+
+  "task_execution": {
+    "parallel_task_limit": 20,
+    "quality_control_enabled": true,
+    "auto_retry_on_failure": true,
+    "max_retries": 3,
+    "fallback_model_on_error": true,
+    "intermediate_report_interval_minutes": 30
+  },
+
+  "delivery": {
+    "auto_format_output": true,
+    "supported_formats": ["txt", "docx", "pdf", "srt", "vtt", "json"],
+    "include_quality_report": true,
+    "auto_submit_on_completion": true
+  },
+
+  "payment": {
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_schedule_hours": [24, 48, 72],
+    "accepted_payment_methods": ["stripe", "paypal", "yoomoney", "crypto_btc", "crypto_eth", "bank_transfer"],
+    "auto_confirm_payment": true,
+    "tax_calculation_enabled": true,
+    "default_tax_rate_percent": 13.0
+  },
+
+  "post_service": {
+    "request_review_after_hours": 24,
+    "auto_respond_to_feedback": true,
+    "offer_additional_services": true,
+    "client_retention_enabled": true
+  },
+
+  "self_healing": {
+    "auto_diagnose_interval_seconds": 60,
+    "auto_restart_failed_components": true,
+    "log_error_and_recover": true,
+    "escalate_unresolved_issues": true,
+    "max_recovery_attempts": 5
+  },
+
+  "logging": {
+    "log_decisions": true,
+    "log_communications": true,
+    "log_bid_details": true,
+    "anonymize_pii_in_logs": true
+  }
+}

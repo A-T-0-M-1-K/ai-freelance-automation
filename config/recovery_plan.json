@@ -1,0 +1,118 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/recovery-plan.schema.json",
+  "version": "1.2.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "description": "Autonomous recovery plan for AI Freelance Automation System. Defines escalation levels, retry strategies, fallback mechanisms, and human escalation protocols.",
+  "global_defaults": {
+    "max_retry_attempts": 3,
+    "retry_backoff_base_seconds": 2,
+    "timeout_seconds": 60,
+    "log_level_on_failure": "CRITICAL",
+    "notify_on_recovery": true
+  },
+  "recovery_levels": {
+    "LEVEL_1_SOFT_RESTART": {
+      "description": "Non-intrusive recovery: reload config, clear cache, restart service in isolation",
+      "actions": [
+        "flush_intelligent_cache",
+        "reload_dynamic_config",
+        "restart_component_in_sandbox"
+      ],
+      "applicable_components": [
+        "transcription_service",
+        "translation_service",
+        "copywriting_service",
+        "email_service",
+        "notification_service"
+      ],
+      "conditions": {
+        "error_types": ["TimeoutError", "ConnectionError", "CacheCorruption"],
+        "system_load_threshold": 0.8
+      }
+    },
+    "LEVEL_2_HARD_RESTART": {
+      "description": "Full component restart with dependency reinitialization",
+      "actions": [
+        "terminate_component_gracefully",
+        "reinitialize_dependencies",
+        "restore_from_last_known_good_state",
+        "validate_ai_model_integrity"
+      ],
+      "applicable_components": [
+        "decision_engine",
+        "workflow_orchestrator",
+        "intelligent_communicator",
+        "bid_automator",
+        "payment_orchestrator"
+      ],
+      "conditions": {
+        "error_types": ["RuntimeError", "ModelLoadFailure", "DeadlockDetected"],
+        "failure_count_in_window": { "count": 2, "window_minutes": 10 }
+      }
+    },
+    "LEVEL_3_DATA_RECOVERY": {
+      "description": "Restore state from encrypted backup, re-sync with platform APIs",
+      "actions": [
+        "decrypt_and_restore_backup",
+        "reauthenticate_platform_sessions",
+        "resync_active_jobs_from_platforms",
+        "rebuild_dialogue_contexts"
+      ],
+      "applicable_components": [
+        "project_service",
+        "client_service",
+        "contract_manager",
+        "platform_manager"
+      ],
+      "backup_retention_hours": 72,
+      "encryption_required": true
+    },
+    "LEVEL_4_EMERGENCY_FALLBACK": {
+      "description": "Switch to minimal operational mode using lightweight models and reduced scope",
+      "actions": [
+        "activate_fallback_ai_models",
+        "disable_non_critical_plugins",
+        "pause_new_job_acquisition",
+        "prioritize_active_deliveries_only"
+      ],
+      "fallback_models": {
+        "transcription": "whisper-tiny",
+        "translation": "opus-mt-en-ru",
+        "copywriting": "gpt-3.5-turbo-16k"
+      },
+      "auto_degradation": true
+    },
+    "LEVEL_5_HUMAN_ESCALATION": {
+      "description": "Notify operator only if all automated recovery fails",
+      "actions": [
+        "generate_incident_report",
+        "encrypt_and_send_diagnostic_bundle",
+        "pause_all_autonomous_operations",
+        "await_human_confirmation_to_resume"
+      ],
+      "notification_channels": ["encrypted_email", "secure_sms", "admin_dashboard_alert"],
+      "requires_manual_approval": true,
+      "auto_resume_after_hours": null
+    }
+  },
+  "component_specific_rules": {
+    "payment_orchestrator": {
+      "never_auto_restart_during_transaction": true,
+      "require_blockchain_consensus_on_recovery": true,
+      "fraud_check_before_resuming": true
+    },
+    "intelligent_communicator": {
+      "preserve_dialogue_history_on_restart": true,
+      "reanalyze_client_sentiment_after_recovery": true
+    },
+    "decision_engine": {
+      "revalidate_all_pending_bids_after_recovery": true,
+      "cooldown_period_minutes": 5
+    }
+  },
+  "security_policies": {
+    "key_rotation_on_recovery_level_3_or_higher": true,
+    "audit_log_immutable_write_on_any_recovery": true,
+    "anomaly_detector_retrain_after_level_4": true
+  }
+}

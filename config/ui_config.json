@@ -1,0 +1,122 @@
+{
+  "$schema": "./schemas/ui_config_schema.json",
+  "version": "1.2.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "ui": {
+    "adaptive_design": {
+      "enabled": true,
+      "breakpoints": {
+        "mobile": 480,
+        "tablet": 768,
+        "desktop": 1024,
+        "large_desktop": 1440
+      },
+      "responsive_behaviors": {
+        "auto_resize_panels": true,
+        "dynamic_font_scaling": true,
+        "touch_optimized_controls": true
+      }
+    },
+    "display_modes": {
+      "available": ["compact", "extended", "expert"],
+      "default": "extended",
+      "permissions": {
+        "compact": ["basic_user"],
+        "extended": ["standard_user", "power_user"],
+        "expert": ["admin", "developer"]
+      }
+    },
+    "themes": {
+      "available": ["light", "dark", "solarized", "ocean", "custom_1"],
+      "default": "dark",
+      "custom_themes_dir": "config/themes/",
+      "auto_switch": {
+        "enabled": true,
+        "based_on": "system_preference"
+      },
+      "theme_settings": {
+        "dark": {
+          "primary_color": "#1E90FF",
+          "background": "#121212",
+          "surface": "#1E1E1E",
+          "text_primary": "#E0E0E0",
+          "text_secondary": "#B0B0B0",
+          "error": "#FF5252",
+          "success": "#4CAF50"
+        },
+        "light": {
+          "primary_color": "#1976D2",
+          "background": "#FFFFFF",
+          "surface": "#F5F5F5",
+          "text_primary": "#212121",
+          "text_secondary": "#757575",
+          "error": "#D32F2F",
+          "success": "#388E3C"
+        }
+      }
+    },
+    "widgets": {
+      "draggable": true,
+      "resizable": true,
+      "persist_layout": true,
+      "layout_storage_key": "ui_widget_layout_v2",
+      "default_widgets": [
+        "job_dashboard",
+        "client_chat_panel",
+        "ai_status_monitor",
+        "payment_tracker",
+        "system_health_indicator"
+      ],
+      "available_widgets": {
+        "job_dashboard": {
+          "title": "Active Jobs",
+          "refresh_interval_sec": 30,
+          "max_items": 20
+        },
+        "client_chat_panel": {
+          "title": "Client Messages",
+          "auto_scroll": true,
+          "sentiment_highlighting": true
+        },
+        "ai_status_monitor": {
+          "title": "AI Engine Status",
+          "show_model_load": true,
+          "show_inference_queue": true
+        },
+        "payment_tracker": {
+          "title": "Pending Payments",
+          "currency": "USD",
+          "show_crypto": true
+        },
+        "system_health_indicator": {
+          "title": "System Health",
+          "critical_threshold_cpu": 90,
+          "critical_threshold_memory": 85
+        }
+      }
+    },
+    "localization": {
+      "default_language": "en",
+      "supported_languages": ["en", "ru", "es", "fr", "de", "zh", "ja"],
+      "rtl_languages": ["ar", "he"],
+      "translation_files_dir": "i18n/ui/"
+    },
+    "accessibility": {
+      "high_contrast_mode": false,
+      "screen_reader_support": true,
+      "keyboard_navigation": true,
+      "animation_reduction": false
+    },
+    "performance": {
+      "lazy_load_widgets": true,
+      "virtualize_long_lists": true,
+      "debounce_input_ms": 300,
+      "max_concurrent_animations": 3
+    },
+    "security": {
+      "hide_sensitive_data_in_preview": true,
+      "blur_screenshots": true,
+      "disable_devtools_in_production": true
+    }
+  }
+}

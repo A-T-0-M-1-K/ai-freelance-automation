@@ -1,0 +1,128 @@
+{
+  "$schema": "https://ai-freelance-automation.dev/schemas/code_analysis/v1.json",
+  "version": "1.4.2",
+  "description": "Configuration for autonomous code analysis, bug detection, and self-healing diagnostics",
+
+  "analysis": {
+    "enabled": true,
+    "scan_interval_seconds": 60,
+    "max_file_size_mb": 10,
+    "exclude_patterns": [
+      "logs/**",
+      "venv/**",
+      ".git/**",
+      "__pycache__/**",
+      "dist/**",
+      "build/**",
+      "node_modules/**"
+    ],
+    "include_patterns": [
+      "core/**/*.py",
+      "services/**/*.py",
+      "plugins/**/*.py",
+      "ai_models/**/*.py",
+      "tools/**/*.py"
+    ]
+  },
+
+  "static_analysis": {
+    "linters": {
+      "flake8": {
+        "enabled": true,
+        "config": {
+          "max-line-length": 120,
+          "ignore": ["E203", "W503"],
+          "select": ["E", "W", "F", "C90"]
+        }
+      },
+      "mypy": {
+        "enabled": true,
+        "strict": true,
+        "ignore_missing_imports": false,
+        "disallow_untyped_defs": true,
+        "warn_return_any": true,
+        "warn_unused_ignores": true
+      },
+      "bandit": {
+        "enabled": true,
+        "severity_level": "high",
+        "confidence_level": "medium",
+        "targets": ["core/", "services/", "plugins/"]
+      }
+    }
+  },
+
+  "bug_detection": {
+    "patterns": {
+      "infinite_loop": {
+        "enabled": true,
+        "max_iterations_threshold": 1000000
+      },
+      "memory_leak": {
+        "enabled": true,
+        "max_objects_per_task": 50000
+      },
+      "deadlock": {
+        "enabled": true,
+        "timeout_seconds": 30
+      },
+      "unhandled_exception": {
+        "enabled": true,
+        "log_traceback": true
+      }
+    },
+    "auto_fix": {
+      "enabled": true,
+      "allowed_fixes": [
+        "missing_type_annotation",
+        "unused_import",
+        "trailing_whitespace",
+        "incorrect_indentation"
+      ],
+      "require_review_for_critical": true
+    }
+  },
+
+  "code_quality": {
+    "metrics": {
+      "cyclomatic_complexity": { "threshold": 15 },
+      "maintainability_index": { "min": 70 },
+      "halstead_volume": { "max": 10000 },
+      "function_length_lines": { "max": 80 }
+    },
+    "enforce_docstrings": true,
+    "docstring_style": "google"
+  },
+
+  "self_healing_integration": {
+    "report_to_health_monitor": true,
+    "trigger_emergency_recovery_on": ["critical_security_issue", "systemic_type_error"],
+    "create_diagnostic_ticket": true,
+    "ticket_template_path": "docs/templates/diagnostic_ticket.md"
+  },
+
+  "logging": {
+    "level": "INFO",
+    "output_file": "logs/tools/code_analysis.log",
+    "structured_logging": true
+  },
+
+  "security": {
+    "scan_secrets": true,
+    "forbidden_patterns": [
+      "password = ",
+      "api_key = ",
+      "secret = ",
+      "eval\\(",
+      "exec\\("
+    ],
+    "encrypt_reports": true,
+    "key_reference": "code_analysis_report_key_v1"
+  },
+
+  "extensibility": {
+    "plugin_support": true,
+    "custom_rules_dir": "plugins/code_analysis_rules/",
+    "allow_dynamic_rule_loading": true
+  }
+}

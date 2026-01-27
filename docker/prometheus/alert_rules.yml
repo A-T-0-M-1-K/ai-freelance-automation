@@ -1,0 +1,183 @@
+# AI_FREELANCE_AUTOMATION - Prometheus Alerting Rules
+# Covers system health, business logic, AI performance, security, and payments
+
+groups:
+  # ----------------------------
+  # CORE SYSTEM HEALTH
+  # ----------------------------
+  - name: core_system
+    rules:
+      - alert: CoreApplicationDown
+        expr: up{job="app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Core application is down"
+          description: "The main AI freelancer application has been down for more than 1 minute."
+
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 90
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 90% for 5 minutes."
+
+      - alert: LowMemoryAvailable
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Low memory available on {{ $labels.instance }}"
+          description: "Available memory is below 10%."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 10m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Available disk space is below 5%."
+
+  # ----------------------------
+  # AI & AUTOMATION PERFORMANCE
+  # ----------------------------
+  - name: ai_automation
+    rules:
+      - alert: JobProcessingLatencyHigh
+        expr: rate(ai_freelance_job_processing_duration_seconds_sum[5m]) / rate(ai_freelance_job_processing_duration_seconds_count[5m]) > 300
+        for: 10m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "AI job processing latency is high"
+          description: "Average job processing time exceeds 5 minutes."
+
+      - alert: TranscriptionErrorRateHigh
+        expr: rate(ai_freelance_transcription_errors_total[10m]) / rate(ai_freelance_transcription_requests_total[10m]) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          team: ai
+        annotations:
+          summary: "Transcription error rate is above 5%"
+          description: "More than 5% of transcription jobs are failing."
+
+      - alert: TranslationQualityDrop
+        expr: avg(ai_freelance_translation_bleu_score) < 0.75
+        for: 15m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "Translation quality dropped (BLEU < 0.75)"
+          description: "Average BLEU score for translations is below acceptable threshold."
+
+  # ----------------------------
+  # FREELANCE PLATFORM INTEGRATION
+  # ----------------------------
+  - name: platform_integration
+    rules:
+      - alert: PlatformScrapingFailure
+        expr: rate(ai_freelance_platform_scraping_errors_total[15m]) > 0
+        for: 15m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Platform scraping is failing"
+          description: "Job scraping from freelance platforms has failed continuously for 15 minutes."
+
+      - alert: BidSubmissionRateLow
+        expr: rate(ai_freelance_bids_submitted_total[1h]) < 1
+        for: 1h
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "Bid submission rate is abnormally low"
+          description: "Fewer than 1 bid per hour submitted in the last hour."
+
+  # ----------------------------
+  # PAYMENT & BUSINESS METRICS
+  # ----------------------------
+  - name: payment_business
+    rules:
+      - alert: PaymentProcessingFailure
+        expr: rate(ai_freelance_payment_failures_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+          team: finance
+        annotations:
+          summary: "Payment processing failures detected"
+          description: "One or more payment transactions have failed in the last 10 minutes."
+
+      - alert: RevenueDrop
+        expr: sum(rate(ai_freelance_revenue_usd_total[1h])) < 10
+        for: 2h
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "Revenue drop detected"
+          description: "Hourly revenue is below $10 for 2 consecutive hours."
+
+  # ----------------------------
+  # SECURITY & ANOMALY DETECTION
+  # ----------------------------
+  - name: security
+    rules:
+      - alert: AnomalousLoginAttempts
+        expr: rate(ai_freelance_auth_failed_attempts_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Anomalous login attempts detected"
+          description: "More than 10 failed auth attempts in 5 minutes."
+
+      - alert: SuspiciousAPIActivity
+        expr: rate(http_requests_total{status=~"4..|5.."}[10m]) / rate(http_requests_total[10m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High error rate in API requests"
+          description: "More than 30% of API requests are returning 4xx/5xx errors."
+
+  # ----------------------------
+  # MONITORING & SELF-HEALTH
+  # ----------------------------
+  - name: monitoring_self_health
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Prometheus target down: {{ $labels.job }}"
+          description: "Target {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: AlertmanagerNotReceivingAlerts
+        expr: rate(prometheus_notifications_sent_total{integration="email"}[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Alertmanager may not be sending alerts"
+          description: "No email notifications sent in the last 10 minutes."

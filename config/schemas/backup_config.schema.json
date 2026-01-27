@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/backup_config.schema.json",
+  "title": "Backup Configuration Schema",
+  "description": "Configuration for automated, secure, and resilient backup system with support for multiple storage backends, encryption, and retention policies.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Globally enable or disable automatic backups.",
+      "default": true
+    },
+    "schedule": {
+      "type": "object",
+      "description": "Cron-like or interval-based scheduling configuration.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["interval", "cron"],
+          "description": "Scheduling strategy."
+        },
+        "interval_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Backup interval in minutes (used if type == 'interval')."
+        },
+        "cron_expression": {
+          "type": "string",
+          "pattern": "^[0-9\\*\\/\\-,\\s]{1,20}$",
+          "description": "Standard cron expression (e.g., '0 2 * * *' for daily at 2 AM)."
+        }
+      },
+      "required": ["type"],
+      "oneOf": [
+        { "required": ["interval_minutes"] },
+        { "required": ["cron_expression"] }
+      ],
+      "additionalProperties": false
+    },
+    "retention": {
+      "type": "object",
+      "description": "Retention policy for backup versions.",
+      "properties": {
+        "max_backups": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum number of backup versions to keep."
+        },
+        "keep_daily": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of daily backups to retain."
+        },
+        "keep_weekly": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of weekly backups to retain."
+        },
+        "keep_monthly": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of monthly backups to retain."
+        }
+      },
+      "required": ["max_backups"],
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "description": "Storage backend configuration.",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["local", "aws_s3", "gcs", "azure_blob", "webdav", "custom"],
+          "description": "Storage provider."
+        },
+        "path": {
+          "type": "string",
+          "description": "Local path or bucket prefix (e.g., '/backups/ai_freelance' or 's3://my-bucket/backups')."
+        },
+        "credentials": {
+          "type": "object",
+          "description": "Authentication credentials (encrypted at rest via key_manager).",
+          "properties": {
+            "access_key_id": { "type": "string" },
+            "secret_access_key": { "type": "string" },
+            "region": { "type": "string" },
+            "endpoint_url": { "type": "string" },
+            "account_name": { "type": "string" },
+            "container_name": { "type": "string" },
+            "token": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["backend", "path"],
+      "additionalProperties": false
+    },
+    "encryption": {
+      "type": "object",
+      "description": "Backup encryption settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": ["AES-256-GCM", "ChaCha20-Poly1305"],
+          "default": "AES-256-GCM"
+        },
+        "key_rotation_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 90
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "compression": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "format": {
+          "type": "string",
+          "enum": ["gzip", "lz4", "zstd"],
+          "default": "zstd"
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "include_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[/a-zA-Z0-9_\\-\\.]+$"
+      },
+      "minItems": 1,
+      "description": "List of absolute paths or glob patterns to include in backup (e.g., ['/data/jobs', '/logs'])."
+    },
+    "exclude_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "File patterns to exclude (e.g., ['*.tmp', 'cache/*'])."
+    },
+    "health_check": {
+      "type": "object",
+      "properties": {
+        "verify_after_backup": {
+          "type": "boolean",
+          "default": true
+        },
+        "alert_on_failure": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "enabled",
+    "schedule",
+    "retention",
+    "storage",
+    "include_paths"
+  ],
+  "additionalProperties": false
+}

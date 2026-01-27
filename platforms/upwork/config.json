@@ -1,0 +1,87 @@
+{
+  "$schema": "https://ai-freelance-automation/schema/v1/platform-config.json",
+  "platform": "upwork",
+  "enabled": true,
+  "version": "1.0.0",
+  "api": {
+    "base_url": "https://www.upwork.com/api",
+    "oauth2": {
+      "client_id": "${UPWORK_CLIENT_ID}",
+      "client_secret": "${UPWORK_CLIENT_SECRET}",
+      "redirect_uri": "https://localhost:8443/auth/upwork/callback",
+      "scopes": [
+        "read:jobs",
+        "write:bids",
+        "read:messages",
+        "write:messages",
+        "read:contracts",
+        "write:contracts",
+        "read:financials"
+      ]
+    },
+    "rate_limit": {
+      "requests_per_minute": 60,
+      "burst": 10
+    },
+    "retry_policy": {
+      "max_retries": 5,
+      "backoff_factor": 1.5,
+      "status_forcelist": [429, 500, 502, 503, 504]
+    }
+  },
+  "job_scraping": {
+    "categories": [
+      "translation",
+      "transcription",
+      "copywriting",
+      "content-writing",
+      "proofreading"
+    ],
+    "min_budget_usd": 20,
+    "max_competition_ratio": 0.7,
+    "exclude_clients_with_rating_below": 4.0,
+    "auto_refresh_interval_seconds": 300,
+    "ml_filtering_enabled": true
+  },
+  "bid_automation": {
+    "enabled": true,
+    "max_concurrent_bids_per_hour": 10,
+    "default_proposal_template": "templates/upwork/proposal.md",
+    "price_strategy": "dynamic_ai",
+    "cover_letter_length_words": {
+      "min": 150,
+      "max": 300
+    },
+    "avoid_keywords": ["urgent", "cheap", "asap", "free"]
+  },
+  "communication": {
+    "auto_respond_to_messages": true,
+    "response_time_minutes": 30,
+    "sentiment_analysis_enabled": true,
+    "multilingual_support": true
+  },
+  "contract_management": {
+    "auto_accept_contracts": true,
+    "milestone_validation": true,
+    "auto_submit_work_on_deadline": true
+  },
+  "payment": {
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_schedule_hours": [24, 48, 72],
+    "supported_methods": ["upwork_escrow", "paypal", "stripe"]
+  },
+  "monitoring": {
+    "metrics_prefix": "platform.upwork",
+    "log_level": "INFO",
+    "enable_tracing": true
+  },
+  "security": {
+    "encrypt_sensitive_fields": true,
+    "require_2fa_for_account_access": true,
+    "session_timeout_minutes": 60
+  },
+  "compliance": {
+    "gdpr_compliant": true,
+    "data_retention_days": 90
+  }
+}

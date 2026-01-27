@@ -1,0 +1,183 @@
+{
+  "system": {
+    "name": "AI_FREELANCE_AUTOMATION",
+    "version": "1.0.0",
+    "environment": "production",
+    "log_level": "INFO",
+    "timezone": "UTC",
+    "data_dir": "./data",
+    "log_dir": "./logs",
+    "temp_dir": "./tmp",
+    "max_concurrent_jobs": 50,
+    "max_active_clients": 100,
+    "autonomous_cycle_interval_seconds": 300,
+    "emergency_recovery_enabled": true,
+    "self_healing_enabled": true,
+    "continuous_learning_enabled": true
+  },
+
+  "ai": {
+    "models": {
+      "transcription": {
+        "provider": "openai",
+        "model": "whisper-1",
+        "fallback": ["local/whisper-large-v3"]
+      },
+      "translation": {
+        "provider": "google",
+        "model": "google-translate-api",
+        "fallback": ["openai/gpt-4o", "local/nllb-200"]
+      },
+      "copywriting": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "fallback": ["anthropic/claude-3-5-sonnet", "local/llama-3-70b"]
+      },
+      "editing": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "fallback": ["local/falcon-180b"]
+      }
+    },
+    "inference": {
+      "max_tokens": 4096,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "timeout_seconds": 120,
+      "retry_attempts": 3,
+      "use_cache": true,
+      "cache_ttl_minutes": 60
+    },
+    "learning": {
+      "feedback_window_days": 30,
+      "auto_finetune_threshold": 0.85,
+      "store_training_data": true,
+      "anonymize_training_data": true
+    }
+  },
+
+  "platforms": {
+    "enabled": ["upwork", "freelancer", "kwork", "fiverr"],
+    "upwork": {
+      "api_base_url": "https://www.upwork.com/api",
+      "job_refresh_interval_minutes": 5,
+      "min_budget_usd": 20,
+      "auto_bid": true,
+      "bid_success_rate_target": 0.3
+    },
+    "freelancer": {
+      "scrape_enabled": true,
+      "api_fallback": false,
+      "min_rating": 4.0
+    },
+    "kwork": {
+      "auto_gig_update": true,
+      "price_strategy": "dynamic"
+    },
+    "fiverr": {
+      "gig_categories": ["writing-translation", "video-animation", "programming-tech"],
+      "response_time_minutes": 15
+    }
+  },
+
+  "communication": {
+    "languages_supported": ["en", "ru", "es", "fr", "de", "pt", "zh", "ja", "ar", "hi"],
+    "default_language": "en",
+    "sentiment_analysis_enabled": true,
+    "emotional_intelligence_level": "high",
+    "response_delay_seconds_min": 10,
+    "response_delay_seconds_max": 120,
+    "auto_translate_incoming": true,
+    "tone_presets": {
+      "professional": true,
+      "friendly": true,
+      "urgent": true
+    }
+  },
+
+  "payment": {
+    "providers_enabled": ["stripe", "paypal", "yoomoney", "crypto", "bank_transfer"],
+    "auto_invoice_on_delivery": true,
+    "payment_reminder_schedule_hours": [24, 48, 72],
+    "fraud_detection_sensitivity": "medium",
+    "tax_calculation_enabled": true,
+    "default_currency": "USD",
+    "supported_currencies": ["USD", "EUR", "RUB", "GBP", "BTC", "ETH"]
+  },
+
+  "security": {
+    "encryption": {
+      "data_at_rest": "AES-256-GCM",
+      "data_in_transit": "TLS-1.3",
+      "key_derivation": "Argon2id"
+    },
+    "key_rotation_days": 90,
+    "audit_logging_enabled": true,
+    "anomaly_detection_enabled": true,
+    "rate_limiting": {
+      "requests_per_minute": 100,
+      "burst_limit": 150
+    },
+    "compliance": {
+      "gdpr_enabled": true,
+      "pci_dss_enabled": true,
+      "hipaa_enabled": false,
+      "soc2_enabled": true
+    }
+  },
+
+  "monitoring": {
+    "metrics_collection_interval_seconds": 10,
+    "enable_predictive_analytics": true,
+    "alert_channels": ["email", "webhook", "internal"],
+    "critical_metrics": [
+      "job_success_rate",
+      "system_uptime",
+      "payment_conversion",
+      "ai_response_latency"
+    ],
+    "reporting": {
+      "daily_report": true,
+      "weekly_report": true,
+      "monthly_report": true,
+      "ad_hoc_enabled": true
+    }
+  },
+
+  "scaling": {
+    "vertical_scaling": {
+      "min_cpu_cores": 2,
+      "recommended_cpu_cores": 8,
+      "min_ram_gb": 4,
+      "recommended_ram_gb": 32
+    },
+    "horizontal_scaling": {
+      "enable_sharding": true,
+      "shard_by": ["client_id", "platform", "job_type"],
+      "auto_scale_workers": true
+    },
+    "auto_optimization": {
+      "enable_cache_cleanup": true,
+      "model_hot_swapping": true,
+      "resource_rebalancing_interval_minutes": 10
+    }
+  },
+
+  "plugins": {
+    "directory": "./plugins",
+    "hot_reload_enabled": true,
+    "isolation_mode": "subprocess",
+    "validation_required": true,
+    "allowed_extensions": [".py", ".so", ".dll"]
+  },
+
+  "ui": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 8080,
+    "themes": ["light", "dark", "adaptive"],
+    "default_theme": "dark",
+    "responsive": true,
+    "auth_required": true
+  }
+}

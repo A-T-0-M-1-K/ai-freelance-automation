@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "standard": {
+      "format": "%(asctime)s [%(levelname)-8s] %(name)-25s: %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
+    },
+    "detailed": {
+      "format": "%(asctime)s [%(levelname)-8s] %(name)-25s | PID:%(process)d | Thread:%(threadName)s | File:%(filename)s:%(lineno)d\n%(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
+    },
+    "security": {
+      "format": "%(asctime)s [SECURITY] %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
+    },
+    "ai_inference": {
+      "format": "%(asctime)s [AI] Model:%(model_name)s | Task:%(task_id)s | %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S"
+    }
+  },
+  "filters": {
+    "require_debug_false": {
+      "()": "logging.Filter",
+      "name": ""
+    }
+  },
+  "handlers": {
+    "console": {
+      "class": "logging.StreamHandler",
+      "level": "INFO",
+      "formatter": "standard",
+      "stream": "ext://sys.stdout"
+    },
+    "file_app": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "INFO",
+      "formatter": "detailed",
+      "filename": "logs/app/application.log",
+      "maxBytes": 52428800,
+      "backupCount": 10,
+      "encoding": "utf-8"
+    },
+    "file_errors": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "WARNING",
+      "formatter": "detailed",
+      "filename": "logs/app/errors.log",
+      "maxBytes": 52428800,
+      "backupCount": 10,
+      "encoding": "utf-8"
+    },
+    "file_security": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "INFO",
+      "formatter": "security",
+      "filename": "logs/security/audit.log",
+      "maxBytes": 52428800,
+      "backupCount": 20,
+      "encoding": "utf-8"
+    },
+    "file_ai": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "INFO",
+      "formatter": "ai_inference",
+      "filename": "logs/ai/inference.log",
+      "maxBytes": 104857600,
+      "backupCount": 15,
+      "encoding": "utf-8"
+    },
+    "file_emergency": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "CRITICAL",
+      "formatter": "detailed",
+      "filename": "logs/system/emergency.log",
+      "maxBytes": 52428800,
+      "backupCount": 5,
+      "encoding": "utf-8"
+    }
+  },
+  "loggers": {
+    "ApplicationCore": { "level": "INFO", "handlers": ["file_app", "console"], "propagate": false },
+    "DecisionEngine": { "level": "INFO", "handlers": ["file_app"], "propagate": false },
+    "IntelligentCommunicator": { "level": "INFO", "handlers": ["file_app"], "propagate": false },
+    "HealthMonitor": { "level": "INFO", "handlers": ["file_app"], "propagate": false },
+    "EmergencyRecovery": { "level": "INFO", "handlers": ["file_emergency", "console"], "propagate": false },
+    "AdvancedCryptoSystem": { "level": "INFO", "handlers": ["file_security"], "propagate": false },
+    "AnomalyDetector": { "level": "WARNING", "handlers": ["file_security", "file_app"], "propagate": false },
+    "AIModelManager": { "level": "INFO", "handlers": ["file_ai"], "propagate": false },
+    "PaymentOrchestrator": { "level": "INFO", "handlers": ["file_app", "file_security"], "propagate": false },
+    "PlatformManager": { "level": "INFO", "handlers": ["file_app"], "propagate": false },
+    "AuditLogger": { "level": "INFO", "handlers": ["file_security"], "propagate": false },
+    "root": {
+      "level": "INFO",
+      "handlers": ["console", "file_app", "file_errors"]
+    }
+  }
+}

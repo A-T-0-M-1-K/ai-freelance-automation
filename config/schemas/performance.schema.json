@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-freelance-automation.com/schemas/performance.schema.json",
+  "title": "PerformanceSystemConfiguration",
+  "description": "Configuration schema for the Performance System (caching, memory, scaling, load balancing).",
+  "type": "object",
+  "properties": {
+    "intelligent_cache": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "max_size_mb": { "type": "integer", "minimum": 10, "maximum": 10000, "default": 512 },
+        "ttl_seconds": { "type": "integer", "minimum": 10, "maximum": 86400, "default": 3600 },
+        "predictive_prefetch": { "type": "boolean", "default": true },
+        "storage_backend": {
+          "type": "string",
+          "enum": ["memory", "redis", "disk", "hybrid"],
+          "default": "memory"
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "memory_manager": {
+      "type": "object",
+      "properties": {
+        "gc_threshold_mb": { "type": "integer", "minimum": 50, "maximum": 10000, "default": 512 },
+        "auto_gc_enabled": { "type": "boolean", "default": true },
+        "oom_protection": { "type": "boolean", "default": true },
+        "memory_limit_mb": { "type": "integer", "minimum": 100, "maximum": 65536, "default": 4096 }
+      },
+      "required": ["gc_threshold_mb", "memory_limit_mb"],
+      "additionalProperties": false
+    },
+    "auto_scaler": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "min_workers": { "type": "integer", "minimum": 1, "maximum": 100, "default": 2 },
+        "max_workers": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 50 },
+        "scale_up_threshold_cpu_percent": { "type": "integer", "minimum": 50, "maximum": 95, "default": 75 },
+        "scale_down_threshold_cpu_percent": { "type": "integer", "minimum": 10, "maximum": 60, "default": 30 },
+        "cooldown_seconds": { "type": "integer", "minimum": 10, "maximum": 300, "default": 60 },
+        "scaling_strategy": {
+          "type": "string",
+          "enum": ["cpu", "memory", "queue_length", "hybrid"],
+          "default": "hybrid"
+        }
+      },
+      "required": ["enabled", "min_workers", "max_workers"],
+      "additionalProperties": false
+    },
+    "load_balancer": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["round_robin", "least_connections", "weighted", "latency_based"],
+          "default": "latency_based"
+        },
+        "health_check_interval_sec": { "type": "integer", "minimum": 1, "maximum": 60, "default": 5 },
+        "failover_timeout_sec": { "type": "integer", "minimum": 1, "maximum": 300, "default": 30 },
+        "sticky_sessions": { "type": "boolean", "default": false }
+      },
+      "required": ["algorithm"],
+      "additionalProperties": false
+    },
+    "profiling": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "sampling_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.1 },
+        "output_path": { "type": "string", "default": "logs/profiling/" }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "intelligent_cache",
+    "memory_manager",
+    "auto_scaler",
+    "load_balancer"
+  ],
+  "additionalProperties": false
+}

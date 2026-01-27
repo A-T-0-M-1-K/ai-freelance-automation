@@ -1,0 +1,137 @@
+# AI_FREELANCE_AUTOMATION/.gitignore
+
+# ==============================
+# ОСНОВНЫЕ ИСКЛЮЧЕНИЯ
+# ==============================
+
+# Секреты и конфиденциальные данные
+.env
+.env.local
+.env.*.local
+config/secrets.json
+config/*.secret.*
+config/private/
+*.pem
+*.key
+*.crt
+
+# Данные пользователя и runtime-данные
+data/backup/
+data/cache/
+data/clients/*/profile.json
+data/clients/*/preferences.json
+data/conversations/
+data/finances/
+data/jobs/
+data/projects/
+data/stats/
+data/settings/user_settings.json
+
+# Логи (кроме шаблонов или примеров)
+logs/**/*.log
+!logs/README.md
+
+# Временные и промежуточные файлы AI
+ai/temp/
+ai/logs/
+ai/models/*/
+!ai/models/README.md
+
+# Резервные копии
+backup/automatic/
+backup/manual/
+
+# ==============================
+# PYTHON
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==============================
+# VIRTUAL ENVIRONMENTS
+# ==============================
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================
+# IDE / EDITORS
+# ==============================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==============================
+# DOCKER
+# ==============================
+.dockerignore
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# ==============================
+# ТЕСТЫ И ПОКРЫТИЕ
+# ==============================
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.cover
+
+# ==============================
+# CI/CD
+# ==============================
+.github/workflows/*.local.yml
+!.github/workflows/ci.yml
+!.github/workflows/tests.yml
+!.github/workflows/release.yml
+
+# ==============================
+# БЛОКЧЕЙН И КРИПТО
+# ==============================
+blockchain/wallets/
+blockchain/keystore/
+!blockchain/contracts/
+
+# ==============================
+# OS / MISC
+# ==============================
+*.tmp
+*.bak
+*.old
+*.orig
+*~
+
+# ==============================
+# ИСКЛЮЧЕНИЯ: НЕ ИГНОРИРОВАТЬ ШАБЛОНЫ И КОНФИГИ
+# ==============================
+!config/*.json
+!config/profiles/
+!config/schemas/
+!templates/
+!docs/
+!scripts/
+!tools/
+!migrations/versions/
