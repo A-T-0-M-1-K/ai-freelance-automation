@@ -309,7 +309,7 @@ class SecretVault:
             file_data = aesgcm.decrypt(nonce, ciphertext, None)
             secrets_data = json.loads(file_data.decode('utf-8'))
 
-            if key in secrets_
+            if key in secrets_data:
                 secret_info = secrets_data[key]
 
                 # Проверка срока действия (TTL)
@@ -344,7 +344,7 @@ class SecretVault:
 
         return default
 
-    def _increment_access_count(self, key: str, secrets_ Optional[Dict] = None):
+    def _increment_access_count(self, key: str, secrets_data: Optional[Dict] = None):
         """Инкремент счетчика доступа к секрету"""
         secrets_path = Path("data/secrets.json")
         if not secrets_path.exists():
@@ -363,7 +363,7 @@ class SecretVault:
                 file_data = aesgcm.decrypt(nonce, ciphertext, None)
                 secrets_data = json.loads(file_data.decode('utf-8'))
 
-            if key in secrets_:
+            if key in secrets_data:
                 secrets_data[key]["access_count"] = secrets_data[key].get("access_count", 0) + 1
                 secrets_data[key]["last_accessed"] = datetime.now().isoformat()
 

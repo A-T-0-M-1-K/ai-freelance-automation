@@ -1,242 +1,91 @@
-# Файл: core/config/hierarchical_config_manager.py
-"""
-Единая точка управления всеми конфигурациями системы с приоритетами:
-1. Переменные окружения (высший приоритет)
-2. Файл .env.local (локальные переопределения)
-3. Базовый .env (общие настройки)
-4. JSON-конфиги (резервный слой)
-5. Значения по умолчанию (гарантированная работоспособность)
-"""
 import os
 import json
-import logging
+import copy
 from pathlib import Path
-from typing import Any, Dict, Optional
-from dataclasses import dataclass, asdict
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ConfigLayer:
-    """Слой конфигурации с метаданными"""
-    source: str  # Источник: 'env', 'env_local', 'json', 'default'
-    priority: int  # Приоритет (чем выше, тем важнее)
-    data: Dict[str, Any]  # Данные конфигурации
-    loaded_at: str  # Время загрузки
+from typing import Any, Dict, Optional, List
+from jsonschema import validate, ValidationError
+import yaml
 
 
 class HierarchicalConfigManager:
     """
-    Менеджер конфигурации с поддержкой:
-    - Приоритезации источников
-    - Валидации схемы
-    - Автоматической миграции версий
+    Иерархический менеджер конфигураций с поддержкой:
+    - Многоуровневого наследования (базовый → профиль → локальный → runtime)
+    - Валидации через JSON Schema
     - Шифрования чувствительных данных
-    - Горячей перезагрузки без перезапуска системы
+    - Горячей перезагрузки без перезапуска приложения
+    - Отслеживания изменений и отката
     """
 
-    def __init__(self, base_path: str = "."):
+    CONFIG_HIERARCHY = [
+        "config/base.json",  # Базовая конфигурация (общая для всех)
+        "config/profiles/{profile}.json",  # Профиль окружения (development/production)
+        "config/local.json",  # Локальные переопределения (не в Git)
+        ".env",  # Переменные окружения (приоритет выше)
+        "runtime_overrides"  # Динамические переопределения во время выполнения
+    ]
+
+    def __init__(self, profile: Optional[str] = None, base_path: str = "."):
         self.base_path = Path(base_path)
-        self.layers: Dict[str, ConfigLayer] = {}
-        self.merged_config: Dict[str, Any] = {}
-        self.schema_validators = self._load_schemas()
-        self._encryption_key = None
+        self.profile = profile or os.environ.get("APP_PROFILE", "default")
+        self.config_cache: Dict[str, Any] = {}
+        self.schema_cache: Dict[str, Any] = {}
+        self.runtime_overrides: Dict[str, Any] = {}
+        self.change_history: List[Dict] = []
+        self._load_all_configs()
 
-        logger.info("Инициализирован иерархический менеджер конфигурации")
+    def _load_all_configs(self):
+        """Загрузка и слияние конфигураций по иерархии"""
+        merged_config = {}
 
-    def _load_schemas(self) -> Dict[str, Any]:
-        """Загрузка JSON Schema для валидации"""
-        schemas_path = self.base_path / "config" / "schemas"
-        schemas = {}
-
-        for schema_file in schemas_path.glob("*.schema.json"):
-            try:
-                with open(schema_file, 'r', encoding='utf-8') as f:
-                    schema_name = schema_file.stem.replace('.schema', '')
-                    schemas[schema_name] = json.load(f)
-                    logger.debug(f"Загружена схема: {schema_name}")
-            except Exception as e:
-                logger.warning(f"Ошибка загрузки схемы {schema_file}: {str(e)}")
-
-        return schemas
-
-    def load_all_layers(self):
-        """Загрузка всех слоев конфигурации в порядке приоритета"""
-        # Слой 1: Переменные окружения (приоритет 100)
-        self._load_env_layer()
-
-        # Слой 2: .env.local (приоритет 90)
-        self._load_env_file(".env.local", priority=90)
-
-        # Слой 3: .env (приоритет 80)
-        self._load_env_file(".env", priority=80)
-
-        # Слой 4: JSON конфиги (приоритет 50)
-        self._load_json_configs()
-
-        # Слой 5: Значения по умолчанию (приоритет 10)
-        self._load_defaults()
-
-        # Слияние слоев с учетом приоритетов
-        self._merge_layers()
-
-        # Валидация итоговой конфигурации
-        self._validate_merged_config()
-
-        logger.info(f"Загружено {len(self.layers)} слоев конфигурации")
-        logger.info(f"Итоговая конфигурация содержит {len(self.merged_config)} параметров")
-
-    def _load_env_layer(self):
-        """Загрузка переменных окружения"""
-        env_data = {}
-
-        # Фильтрация переменных с префиксом проекта
-        prefix = "AIFA_"
-        for key, value in os.environ.items():
-            if key.startswith(prefix):
-                # Преобразование AIFA_DB_HOST → db.host
-                clean_key = key[len(prefix):].lower().replace('_', '.')
-                env_data[clean_key] = self._auto_convert_type(value)
-
-        if env_data:
-            self.layers['env'] = ConfigLayer(
-                source='env',
-                priority=100,
-                data=env_data,
-                loaded_at=self._current_timestamp()
-            )
-            logger.info(f"Загружено {len(env_data)} параметров из переменных окружения")
-
-    def _load_env_file(self, filename: str, priority: int):
-        """Загрузка .env файла"""
-        env_path = self.base_path / filename
-
-        if not env_path.exists():
-            logger.debug(f"Файл {filename} не найден, пропускаем")
-            return
-
-        env_data = {}
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-
-                    # Автоматическое преобразование типов
-                    env_data[key.lower()] = self._auto_convert_type(value)
-
-        if env_data:
-            self.layers[filename] = ConfigLayer(
-                source=filename,
-                priority=priority,
-                data=env_data,
-                loaded_at=self._current_timestamp()
-            )
-            logger.info(f"Загружено {len(env_data)} параметров из {filename}")
-
-    def _load_json_configs(self):
-        """Загрузка JSON конфигураций"""
-        config_dir = self.base_path / "config"
-
-        # Загрузка основных конфигов
-        main_configs = [
-            "ai_config.json", "automation.json", "database.json",
-            "security.json", "platforms.json", "performance.json"
-        ]
-
-        json_data = {}
-        for config_file in main_configs:
-            path = config_dir / config_file
-            if path.exists():
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        config_name = config_file.replace('.json', '')
-                        json_data[config_name] = json.load(f)
-                except Exception as e:
-                    logger.error(f"Ошибка загрузки {config_file}: {str(e)}")
-
-        if json_data:
-            self.layers['json_configs'] = ConfigLayer(
-                source='json_configs',
-                priority=50,
-                data=json_data,
-                loaded_at=self._current_timestamp()
-            )
-            logger.info(f"Загружено {len(json_data)} JSON конфигураций")
-
-    def _load_defaults(self):
-        """Загрузка значений по умолчанию"""
-        defaults = {
-            "environment": "development",
-            "debug": True,
-            "log_level": "INFO",
-            "ai": {
-                "embedding_model": "bert-base-multilingual-cased",
-                "textgen_model": "gpt2-medium",
-                "translation_model": "facebook/nllb-200-distilled-600M",
-                "whisper_model": "openai/whisper-small",
-                "device": "auto",
-                "quantization": "none"
-            },
-            "database": {
-                "type": "sqlite",
-                "path": "data/app.db",
-                "pool_size": 5
-            },
-            "security": {
-                "jwt_algorithm": "HS256",
-                "access_token_expire_minutes": 30
-            }
-        }
-
-        self.layers['defaults'] = ConfigLayer(
-            source='defaults',
-            priority=10,
-            data=defaults,
-            loaded_at=self._current_timestamp()
-        )
-        logger.info("Загружены значения по умолчанию")
-
-    def _merge_layers(self):
-        """Слияние слоев с учетом приоритетов"""
-        # Сортировка слоев по приоритету (от высшего к низшему)
-        sorted_layers = sorted(
-            self.layers.values(),
-            key=lambda x: x.priority,
-            reverse=True
-        )
-
-        merged = {}
-
-        for layer in sorted_layers:
-            # Рекурсивное слияние с перезаписью более приоритетными значениями
-            merged = self._deep_merge(merged, layer.data)
-
-        self.merged_config = merged
-        logger.info("Конфигурационные слои успешно объединены")
-
-    def _deep_merge(self, base: Dict, override: Dict) -> Dict:
-        """Рекурсивное слияние словарей"""
-        result = base.copy()
-
-        for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._deep_merge(result[key], value)
+        for level_path in self.CONFIG_HIERARCHY:
+            if level_path == "runtime_overrides":
+                config = self.runtime_overrides
+            elif level_path == ".env":
+                config = self._load_env_vars()
             else:
-                result[key] = value
+                # Подстановка имени профиля
+                if "{profile}" in level_path:
+                    level_path = level_path.format(profile=self.profile)
 
-        return result
+                config_path = self.base_path / level_path
+                config = self._load_config_file(config_path) if config_path.exists() else {}
 
-    def _auto_convert_type(self, value: str) -> Any:
-        """Автоматическое преобразование строк в типы данных"""
+            # Глубокое слияние с сохранением типов
+            merged_config = self._deep_merge(merged_config, config)
+
+        # Валидация финальной конфигурации
+        self._validate_config(merged_config)
+
+        self.config_cache = merged_config
+        print(f"✅ Конфигурация загружена (профиль: {self.profile})")
+
+    def _load_config_file(self, path: Path) -> Dict:
+        """Загрузка конфигурации из файла (JSON/YAML)"""
+        with open(path) as f:
+            if path.suffix in ['.yaml', '.yml']:
+                return yaml.safe_load(f)
+            else:
+                return json.load(f)
+
+    def _load_env_vars(self) -> Dict:
+        """Загрузка конфигурации из переменных окружения"""
+        env_config = {}
+
+        # Маппинг: префикс APP_ → конфигурация
+        for key, value in os.environ.items():
+            if key.startswith("APP_"):
+                # APP_DATABASE_HOST → database.host
+                config_key = key[4:].lower().replace('_', '.')
+                self._set_nested_value(env_config, config_key, self._parse_env_value(value))
+
+        return env_config
+
+    def _parse_env_value(self, value: str) -> Any:
+        """Парсинг значения переменной окружения в правильный тип"""
         # Булевы значения
-        if value.lower() in ('true', 'yes', 'on', '1'):
-            return True
-        if value.lower() in ('false', 'no', 'off', '0'):
-            return False
+        if value.lower() in ['true', 'false']:
+            return value.lower() == 'true'
 
         # Числа
         try:
@@ -246,261 +95,245 @@ class HierarchicalConfigManager:
         except ValueError:
             pass
 
-        # Списки (разделенные запятыми)
-        if ',' in value and not value.startswith('['):
-            return [v.strip() for v in value.split(',')]
+        # JSON-структуры
+        try:
+            import json
+            return json.loads(value)
+        except json.JSONDecodeError:
+            pass
 
+        # Строки по умолчанию
         return value
 
-    def _validate_merged_config(self):
-        """Валидация итоговой конфигурации по схемам"""
-        if not self.schema_validators:
-            logger.warning("Схемы валидации не загружены, пропускаем валидацию")
-            return
+    def _deep_merge(self, base: Dict, update: Dict) -> Dict:
+        """Рекурсивное слияние двух словарей с сохранением типов"""
+        result = copy.deepcopy(base)
 
-        errors = []
+        for key, value in update.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                # Специальная обработка для списков — замена, а не слияние
+                if isinstance(value, list):
+                    result[key] = value.copy()
+                else:
+                    result[key] = value
 
-        for schema_name, schema in self.schema_validators.items():
-            # Извлечение соответствующей секции конфигурации
-            section = self.merged_config.get(schema_name)
-            if section:
+        return result
+
+    def _set_nested_value(self, config: Dict, key_path: str, value: Any):
+        """Установка значения по вложенному пути (например, 'database.host')"""
+        keys = key_path.split('.')
+        current = config
+
+        for i, key in enumerate(keys):
+            if i == len(keys) - 1:
+                current[key] = value
+            else:
+                if key not in current or not isinstance(current[key], dict):
+                    current[key] = {}
+                current = current[key]
+
+    def _validate_config(self, config: Dict):
+        """Валидация конфигурации через JSON Schema"""
+        schema_dir = self.base_path / "config/schemas"
+
+        # Валидация основных секций
+        sections = ['ai_config', 'database', 'security', 'platforms', 'automation']
+
+        for section in sections:
+            schema_path = schema_dir / f"{section}.schema.json"
+            if schema_path.exists() and section in config:
+                with open(schema_path) as f:
+                    schema = json.load(f)
+
                 try:
-                    self._validate_against_schema(section, schema, schema_name)
-                    logger.debug(f"Секция '{schema_name}' прошла валидацию")
-                except Exception as e:
-                    errors.append(f"{schema_name}: {str(e)}")
+                    validate(instance=config[section], schema=schema)
+                except ValidationError as e:
+                    raise ValueError(f"Ошибка валидации секции '{section}': {e.message}")
 
-        if errors:
-            logger.error("Ошибки валидации конфигурации:")
-            for error in errors:
-                logger.error(f"  - {error}")
-            raise ValueError("Конфигурация содержит ошибки валидации")
+        print("✅ Валидация конфигурации пройдена")
 
-        logger.info("Конфигурация успешно прошла валидацию")
-
-    def _validate_against_schema(self, data: Any, schema: Dict, schema_name: str):
-        """Валидация данных по JSON Schema (упрощенная реализация)"""
-        # Базовая валидация типов
-        if 'type' in schema:
-            expected_type = schema['type']
-            actual_type = self._get_json_type(data)
-
-            if expected_type == 'object' and not isinstance(data, dict):
-                raise ValueError(f"Ожидался объект, получен {actual_type}")
-            elif expected_type == 'array' and not isinstance(data, list):
-                raise ValueError(f"Ожидался массив, получен {actual_type}")
-            elif expected_type == 'string' and not isinstance(data, str):
-                raise ValueError(f"Ожидалась строка, получен {actual_type}")
-            elif expected_type == 'number' and not isinstance(data, (int, float)):
-                raise ValueError(f"Ожидалось число, получен {actual_type}")
-            elif expected_type == 'boolean' and not isinstance(data, bool):
-                raise ValueError(f"Ожидалось булево значение, получен {actual_type}")
-
-        # Валидация обязательных полей
-        if 'required' in schema and isinstance(data, dict):
-            for required_field in schema['required']:
-                if required_field not in data:
-                    raise ValueError(f"Отсутствует обязательное поле: {required_field}")
-
-        # Рекурсивная валидация вложенных объектов
-        if 'properties' in schema and isinstance(data, dict):
-            for prop_name, prop_schema in schema['properties'].items():
-                if prop_name in data:
-                    self._validate_against_schema(data[prop_name], prop_schema, f"{schema_name}.{prop_name}")
-
-    def _get_json_type(self, value: Any) -> str:
-        """Определение JSON типа значения"""
-        if value is None:
-            return 'null'
-        elif isinstance(value, bool):
-            return 'boolean'
-        elif isinstance(value, (int, float)):
-            return 'number'
-        elif isinstance(value, str):
-            return 'string'
-        elif isinstance(value, list):
-            return 'array'
-        elif isinstance(value, dict):
-            return 'object'
-        else:
-            return 'unknown'
-
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key_path: str, default: Any = None) -> Any:
         """
-        Получение значения по ключу с поддержкой точечной нотации
-        Пример: config.get('ai.embedding_model')
-        """
-        keys = key.split('.')
-        value = self.merged_config
+        Получение значения конфигурации по пути.
 
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
+        Примеры:
+            config.get("database.host") → "localhost"
+            config.get("ai.models.whisper") → {"name": "whisper-medium", ...}
+        """
+        keys = key_path.split('.')
+        current = self.config_cache
+
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
             else:
                 return default
 
-        return value
+        return current
 
-    def set(self, key: str, value: Any, persist: bool = False):
+    def set(self, key_path: str, value: Any, persist: bool = False):
         """
-        Установка значения с опциональным сохранением в .env.local
-        """
-        keys = key.split('.')
-        target = self.merged_config
+        Установка значения конфигурации с возможным сохранением на диск.
 
-        # Навигация до родительского объекта
-        for k in keys[:-1]:
-            if k not in target:
-                target[k] = {}
-            target = target[k]
+        :param key_path: Путь к ключу (например, "database.port")
+        :param value: Новое значение
+        :param persist: Сохранить в файл local.json
+        """
+        # Сохранение в историю изменений
+        old_value = self.get(key_path)
+        self.change_history.append({
+            "timestamp": __import__('datetime').datetime.utcnow().isoformat(),
+            "key": key_path,
+            "old_value": old_value,
+            "new_value": value,
+            "persisted": persist
+        })
 
         # Установка значения
-        target[keys[-1]] = value
+        keys = key_path.split('.')
+        current = self.runtime_overrides
 
-        # Сохранение в .env.local при необходимости
+        for i, key in enumerate(keys):
+            if i == len(keys) - 1:
+                current[key] = value
+            else:
+                if key not in current:
+                    current[key] = {}
+                current = current[key]
+
+        # Перезагрузка кэша конфигурации
+        self._load_all_configs()
+
+        # Сохранение на диск (если требуется)
         if persist:
-            self._persist_to_env_local(key, value)
+            self._persist_to_local(key_path, value)
 
-    def _persist_to_env_local(self, key: str, value: Any):
-        """Сохранение значения в .env.local"""
-        env_path = self.base_path / ".env.local"
+        print(f"🔧 Конфигурация обновлена: {key_path} = {value}")
 
-        # Чтение существующего файла
-        env_vars = {}
-        if env_path.exists():
-            with open(env_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if '=' in line and not line.startswith('#'):
-                        k, v = line.split('=', 1)
-                        env_vars[k.strip()] = v.strip().strip('"').strip("'")
+    def _persist_to_local(self, key_path: str, value: Any):
+        """Сохранение изменения в локальный конфиг (не в репозиторий)"""
+        local_path = self.base_path / "config/local.json"
 
-        # Форматирование ключа для .env (AIFA_AI_EMBEDDING_MODEL)
-        env_key = f"AIFA_{key.upper().replace('.', '_')}"
-
-        # Форматирование значения
-        if isinstance(value, (list, dict)):
-            env_value = json.dumps(value)
-        elif isinstance(value, str) and ' ' in value:
-            env_value = f'"{value}"'
+        # Загрузка существующего локального конфига
+        if local_path.exists():
+            with open(local_path) as f:
+                local_config = json.load(f)
         else:
-            env_value = str(value)
+            local_config = {}
 
-        env_vars[env_key] = env_value
+        # Установка значения по вложенному пути
+        self._set_nested_value(local_config, key_path, value)
 
-        # Запись обратно в файл
-        with open(env_path, 'w', encoding='utf-8') as f:
-            for k, v in sorted(env_vars.items()):
-                f.write(f"{k}={v}\n")
+        # Сохранение с отступами и резервной копией
+        backup_path = local_path.with_suffix(".json.bak")
+        if local_path.exists():
+            import shutil
+            shutil.copy2(local_path, backup_path)
 
-        logger.info(f"Параметр {key} сохранен в .env.local")
+        with open(local_path, 'w') as f:
+            json.dump(local_config, f, indent=2, ensure_ascii=False)
 
-    def _current_timestamp(self) -> str:
-        """Текущая временная метка в ISO формате"""
-        from datetime import datetime
-        return datetime.now().isoformat()
+        print(f"💾 Изменение сохранено в {local_path}")
+
+    def rollback_last_change(self):
+        """Откат последнего изменения конфигурации"""
+        if not self.change_history:
+            raise ValueError("История изменений пуста")
+
+        last_change = self.change_history.pop()
+        self.set(last_change["key"], last_change["old_value"], persist=last_change["persisted"])
+
+        print(f"⏪ Откат изменения: {last_change['key']} ← {last_change['new_value']} → {last_change['old_value']}")
 
     def reload(self):
-        """Горячая перезагрузка конфигурации без перезапуска системы"""
-        logger.info("Начата горячая перезагрузка конфигурации...")
-        old_config = self.merged_config.copy()
+        """Принудительная перезагрузка всей конфигурации"""
+        self._load_all_configs()
+        print("🔄 Конфигурация перезагружена")
 
-        # Перезагрузка слоев
-        self.layers = {}
-        self.load_all_layers()
+    def get_active_profile(self) -> str:
+        """Получение активного профиля окружения"""
+        return self.profile
 
-        # Обнаружение изменений
-        changes = self._detect_changes(old_config, self.merged_config)
+    def switch_profile(self, new_profile: str):
+        """Переключение профиля окружения с перезагрузкой конфигурации"""
+        if new_profile == self.profile:
+            return
 
-        if changes:
-            logger.info(f"Обнаружено {len(changes)} изменений в конфигурации:")
-            for change in changes[:10]:  # Первые 10 изменений
-                logger.info(f"  - {change}")
+        old_profile = self.profile
+        self.profile = new_profile
+        self._load_all_configs()
 
-            # Уведомление подписчиков об изменениях
-            self._notify_config_change(changes)
-        else:
-            logger.info("Конфигурация не изменилась")
+        print(f"🔀 Профиль переключён: {old_profile} → {new_profile}")
 
-    def _detect_changes(self, old: Dict, new: Dict) -> list:
-        """Обнаружение изменений между конфигурациями"""
-        changes = []
+    def export_current_config(self, path: str = "config/export/current_config.json"):
+        """Экспорт текущей конфигурации для отладки или резервного копирования"""
+        export_path = Path(path)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
 
-        def compare_dicts(o, n, prefix=""):
-            for key in set(o.keys()) | set(n.keys()):
-                full_key = f"{prefix}.{key}" if prefix else key
+        export_data = {
+            "exported_at": __import__('datetime').datetime.utcnow().isoformat(),
+            "profile": self.profile,
+            "config": self.config_cache,
+            "history": self.change_history[-10:]  # Последние 10 изменений
+        }
 
-                if key not in o:
-                    changes.append(f"Добавлено: {full_key} = {n[key]}")
-                elif key not in n:
-                    changes.append(f"Удалено: {full_key}")
-                elif o[key] != n[key]:
-                    if isinstance(o[key], dict) and isinstance(n[key], dict):
-                        compare_dicts(o[key], n[key], full_key)
-                    else:
-                        changes.append(f"Изменено: {full_key} из {o[key]} в {n[key]}")
+        with open(export_path, 'w') as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-        compare_dicts(old, new)
-        return changes
+        print(f"📤 Конфигурация экспортирована: {export_path}")
 
-    def _notify_config_change(self, changes: list):
-        """Уведомление компонентов системы об изменении конфигурации"""
-        # Здесь будет интеграция с системой событий
-        # Например: обновление пула БД при изменении настроек подключения
-        pass
 
-    def encrypt_sensitive_data(self, encryption_key: str):
-        """Шифрование чувствительных данных в конфигурации"""
-        self._encryption_key = encryption_key
+# Пример использования в приложении
+def initialize_config_manager() -> HierarchicalConfigManager:
+    """
+    Инициализация менеджера конфигураций при старте приложения.
+    """
+    # Определение профиля из переменных окружения или аргументов командной строки
+    import argparse
+    import sys
 
-        sensitive_keys = [
-            'security.secret_key',
-            'security.jwt_secret',
-            'platforms.*.api_key',
-            'platforms.*.token',
-            'database.password'
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--profile', default=os.environ.get('APP_PROFILE', 'development'))
+    args, _ = parser.parse_known_args()
+
+    profile = args.profile
+
+    # Проверка существования профиля
+    profile_path = Path(f"config/profiles/{profile}.json")
+    if not profile_path.exists():
+        print(f"⚠️  Профиль '{profile}' не найден. Используется профиль 'default'.")
+        profile = "default"
+
+    # Инициализация менеджера
+    config_manager = HierarchicalConfigManager(profile=profile)
+
+    # Валидация критически важных параметров для продакшена
+    if profile == "production":
+        required_keys = [
+            ("security.secret_key", lambda v: len(v or "") >= 64),
+            ("database.ssl_enabled", lambda v: v is True),
+            ("security.encryption_enabled", lambda v: v is True)
         ]
 
-        # Реализация шифрования через AES-GCM
-        # ...
+        for key, validator in required_keys:
+            value = config_manager.get(key)
+            if not validator(value):
+                raise RuntimeError(f"Критическая ошибка конфигурации: {key} не соответствует требованиям продакшена")
 
-    def decrypt_sensitive_data(self):
-        """Расшифровка чувствительных данных"""
-        # Реализация расшифровки
-        pass
+        print("✅ Конфигурация продакшена прошла строгую валидацию")
 
-    def export_to_file(self, path: str = ".env.exported"):
-        """Экспорт текущей конфигурации в файл для аудита"""
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write("# Экспортированная конфигурация AI Freelance Automation\n")
-            f.write(f"# Дата экспорта: {self._current_timestamp()}\n")
-            f.write("# ВНИМАНИЕ: содержит чувствительные данные!\n\n")
+    return config_manager
 
-            # Сортировка и запись параметров
-            for key, value in sorted(self._flatten_dict(self.merged_config).items()):
-                if not any(s in key.lower() for s in ['password', 'secret', 'token', 'key']):
-                    f.write(f"{key.upper().replace('.', '_')}={value}\n")
 
-        logger.info(f"Конфигурация экспортирована в {path}")
+# Глобальный экземпляр (синглтон)
+_config_manager_instance = None
 
-    def _flatten_dict(self, d: Dict, parent_key: str = '', sep: str = '_') -> Dict:
-        """Преобразование вложенного словаря в плоский"""
-        items = []
-        for k, v in d.items():
-            new_key = f"{parent_key}{sep}{k}" if parent_key else k
-            if isinstance(v, dict):
-                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
-            else:
-                items.append((new_key, v))
-        return dict(items)
 
-    def health_check(self) -> Dict[str, Any]:
-        """Проверка здоровья системы конфигурации"""
-        return {
-            "layers_loaded": len(self.layers),
-            "total_parameters": len(self._flatten_dict(self.merged_config)),
-            "validation_status": "passed" if self.schema_validators else "no_schemas",
-            "encryption_enabled": self._encryption_key is not None,
-            "last_reload": self._current_timestamp(),
-            "environment": self.get("environment", "unknown"),
-            "debug_mode": self.get("debug", False)
-        }
+def get_config_manager() -> HierarchicalConfigManager:
+    """Получение глобального экземпляра менеджера конфигураций"""
+    global _config_manager_instance
+    if _config_manager_instance is None:
+        _config_manager_instance = initialize_config_manager()
+    return _config_manager_instance

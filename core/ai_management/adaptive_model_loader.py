@@ -17,18 +17,18 @@ logger = logging.getLogger(__name__)
 
 class DeviceCapability(Enum):
     """Классификация возможностей устройства"""
-    HIGH_END_GPU = "high_end_gpu"  # GPU с 8+ ГБ VRAM (RTX 3070+)
-    MID_RANGE_GPU = "mid_range_gpu"  # GPU с 4-8 ГБ VRAM (GTX 1660 / RTX 3050)
+    HIGH_END_GPU = "high_end_gpu"      # GPU с 8+ ГБ VRAM (RTX 3070+)
+    MID_RANGE_GPU = "mid_range_gpu"    # GPU с 4-8 ГБ VRAM (GTX 1660 / RTX 3050)
     INTEGRATED_GPU = "integrated_gpu"  # Интегрированная графика (Intel Iris / AMD Vega)
-    CPU_ONLY = "cpu_only"  # Только CPU (ноутбуки без GPU)
+    CPU_ONLY = "cpu_only"               # Только CPU (ноутбуки без GPU)
 
 
 class ModelVariant(Enum):
     """Варианты моделей для разных устройств"""
-    FULL = "full"  # Полная модель (оригинальная)
-    QUANTIZED_INT8 = "int8"  # Квантованная 8-бит
-    QUANTIZED_INT4 = "int4"  # Квантованная 4-бит (для слабых устройств)
-    DISTILLED = "distilled"  # Дистиллированная легкая версия
+    FULL = "full"           # Полная модель (оригинальная)
+    QUANTIZED_INT8 = "int8" # Квантованная 8-бит
+    QUANTIZED_INT4 = "int4" # Квантованная 4-бит (для слабых устройств)
+    DISTILLED = "distilled" # Дистиллированная легкая версия
 
 
 @dataclass
@@ -58,16 +58,15 @@ class AdaptiveModelLoader:
 
         logger.info(f"✅ Обнаружен профиль устройства: {self.device_profile.capability.value}")
         logger.info(f"✅ Рекомендуемый вариант моделей: {self.device_profile.recommended_variant.value}")
-        logger.info(
-            f"✅ Доступно ОЗУ: {self.device_profile.available_ram_gb:.1f} ГБ из {self.device_profile.total_ram_gb:.1f} ГБ")
+        logger.info(f"✅ Доступно ОЗУ: {self.device_profile.available_ram_gb:.1f} ГБ из {self.device_profile.total_ram_gb:.1f} ГБ")
         if self.device_profile.has_gpu:
             logger.info(f"✅ GPU: {self.device_profile.gpu_name} с {self.device_profile.gpu_vram_gb:.1f} ГБ VRAM")
 
     def _detect_device_capabilities(self) -> DeviceProfile:
         """Автоматическое определение характеристик устройства"""
         # Определение ОЗУ
-        total_ram = psutil.virtual_memory().total / (1024 ** 3)
-        available_ram = psutil.virtual_memory().available / (1024 ** 3)
+        total_ram = psutil.virtual_memory().total / (1024**3)
+        available_ram = psutil.virtual_memory().available / (1024**3)
         cpu_cores = psutil.cpu_count(logical=True)
 
         # Определение GPU
@@ -77,7 +76,7 @@ class AdaptiveModelLoader:
 
         if has_gpu:
             gpu_name = torch.cuda.get_device_name(0)
-            gpu_vram = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+            gpu_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
 
         # Классификация устройства с учетом реальных возможностей
         if has_gpu and gpu_vram >= 8.0:
@@ -170,8 +169,7 @@ class AdaptiveModelLoader:
             if not model_path:
                 # Автоматический фолбэк на доступный вариант
                 model_path, detected_variant = self.get_optimal_variant(model_type)
-                logger.warning(
-                    f"⚠️ Вариант {variant_name} недоступен для {model_type}, используется {detected_variant.value}")
+                logger.warning(f"⚠️ Вариант {variant_name} недоступен для {model_type}, используется {detected_variant.value}")
         else:
             model_path, variant = self.get_optimal_variant(model_type)
 
@@ -182,8 +180,7 @@ class AdaptiveModelLoader:
             await self._download_model(model_type, variant)
 
         # Загрузка модели с оптимальными параметрами
-        logger.info(
-            f"⚙️ Загрузка модели {model_type} ({variant.value}) для устройства {self.device_profile.capability.value}")
+        logger.info(f"⚙️ Загрузка модели {model_type} ({variant.value}) для устройства {self.device_profile.capability.value}")
 
         try:
             if model_type == "embedding":
@@ -199,8 +196,7 @@ class AdaptiveModelLoader:
 
         except RuntimeError as e:
             if "out of memory" in str(e).lower() or "cuda out of memory" in str(e).lower():
-                logger.warning(
-                    f"MemoryWarning️ Недостаточно памяти для загрузки {model_type} ({variant.value}), пробуем более легкий вариант...")
+                logger.warning(f"MemoryWarning️ Недостаточно памяти для загрузки {model_type} ({variant.value}), пробуем более легкий вариант...")
                 # Автоматический переход на более легкий вариант
                 lighter_variants = {
                     ModelVariant.FULL: ModelVariant.QUANTIZED_INT8,
