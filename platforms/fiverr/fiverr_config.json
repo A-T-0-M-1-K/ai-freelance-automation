@@ -1,0 +1,74 @@
+{
+  "name": "Fiverr",
+  "base_url": "https://www.fiverr.com",
+  "api_base_url": "https://api.fiverr.com/v1",
+  "platform_type": "freelance_marketplace",
+  "auth_method": "oauth2",
+  "api_version": "v1",
+
+  "endpoints": {
+    "search_gigs": "gigs/search",
+    "get_gig": "gigs/{gig_id}",
+    "place_order": "orders",
+    "my_orders": "orders",
+    "my_gigs": "gigs"
+  },
+
+  "field_mapping": {
+    "title": "title",
+    "description": "description",
+    "budget": "packages.0.price",
+    "currency": "currency",
+    "deadline": "packages.0.delivery_time",
+    "skills": "skills",
+    "client_rating": "seller.rating",
+    "job_type": "category",
+    "experience_level": "level",
+    "location": "seller.location",
+    "posted_date": "created_at",
+    "proposals_count": "orders_count",
+    "job_id": "id"
+  },
+
+  "auth_params": {
+    "client_id": "YOUR_FIVERR_CLIENT_ID",
+    "client_secret": "YOUR_FIVERR_CLIENT_SECRET",
+    "token_url": "https://api.fiverr.com/v1/oauth/token",
+    "redirect_uri": "http://localhost:8080/callback",
+    "scopes": ["read", "write"]
+  },
+
+  "default_headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "AI-Freelance-Automation/1.0"
+  },
+
+  "pagination": {
+    "param": "page",
+    "size_param": "per_page",
+    "default_size": 20
+  },
+
+  "rate_limit": {
+    "requests_per_minute": 60,
+    "requests_per_hour": 1000
+  },
+
+  "categories": [
+    "graphics-design",
+    "digital-marketing",
+    "writing-translation",
+    "video-animation",
+    "music-audio",
+    "programming-tech",
+    "business",
+    "lifestyle"
+  ],
+
+  "package_types": [
+    "basic",
+    "standard",
+    "premium"
+  ]
+}

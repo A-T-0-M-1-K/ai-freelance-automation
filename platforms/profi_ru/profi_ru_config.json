@@ -1,0 +1,65 @@
+{
+  "name": "Профи.ру",
+  "base_url": "https://profi.ru",
+  "api_base_url": "https://api.profi.ru/v1",
+  "platform_type": "local_marketplace",
+  "auth_method": "token",
+  "api_version": "v1",
+
+  "endpoints": {
+    "search_orders": "orders/search",
+    "get_order": "orders/{order_id}",
+    "place_response": "orders/{order_id}/responses",
+    "my_responses": "responses",
+    "profile": "profile",
+    "categories": "categories"
+  },
+
+  "field_mapping": {
+    "title": "title",
+    "description": "description",
+    "budget": "price.max",
+    "currency": "currency",
+    "deadline": "deadline",
+    "skills": "categories",
+    "client_rating": "client.rating",
+    "job_type": "type",
+    "experience_level": "experience",
+    "location": "location.city",
+    "posted_date": "created_at",
+    "proposals_count": "responses_count",
+    "job_id": "id"
+  },
+
+  "auth_params": {
+    "token": "YOUR_PROFI_API_TOKEN",
+    "token_type": "Bearer"
+  },
+
+  "default_headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "AI-Freelance-Automation/1.0"
+  },
+
+  "pagination": {
+    "param": "page",
+    "size_param": "limit",
+    "default_size": 20
+  },
+
+  "rate_limit": {
+    "requests_per_minute": 30,
+    "requests_per_hour": 600
+  },
+
+  "categories": [
+    "it_programming",
+    "design",
+    "marketing",
+    "translations",
+    "content",
+    "audio_video",
+    "consulting"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "name": "Хабр Фриланс",
+  "base_url": "https://freelance.habr.com",
+  "api_base_url": "https://freelance.habr.com/api",
+  "platform_type": "local_marketplace",
+  "auth_method": "cookie",
+  "api_version": "v1",
+
+  "endpoints": {
+    "search_orders": "orders",
+    "get_order": "orders/{order_id}",
+    "place_bid": "orders/{order_id}/offers",
+    "my_bids": "offers",
+    "my_orders": "my_orders",
+    "profile": "profile"
+  },
+
+  "field_mapping": {
+    "title": "title",
+    "description": "description",
+    "budget": "budget",
+    "currency": "currency",
+    "deadline": "deadline",
+    "skills": "skills",
+    "client_rating": "customer_stats.average_price",
+    "job_type": "type",
+    "experience_level": "category",
+    "location": "customer_stats.location",
+    "posted_date": "published_at",
+    "proposals_count": "offers_count",
+    "job_id": "id"
+  },
+
+  "auth_params": {
+    "cookies": {
+      "sessionid": "YOUR_HABR_SESSION_ID",
+      "csrftoken": "YOUR_HABR_CSRF_TOKEN"
+    }
+  },
+
+  "default_headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-CSRFToken": "YOUR_HABR_CSRF_TOKEN",
+    "User-Agent": "Mozilla/5.0"
+  },
+
+  "pagination": {
+    "param": "page",
+    "size_param": "per_page",
+    "default_size": 25
+  },
+
+  "scraping": {
+    "enabled": true,
+    "selectors": {
+      "title": "h2.task__title",
+      "description": "div.task__description",
+      "budget": "div.task__price",
+      "skills": "div.tags.tags--auto",
+      "posted_date": "div.task__meta",
+      "proposals_count": "span.count",
+      "deadline": "div.task__deadline"
+    }
+  },
+
+  "rate_limit": {
+    "requests_per_minute": 20,
+    "requests_per_hour": 500
+  },
+
+  "categories": {
+    "development": "1",
+    "design": "2",
+    "content": "3",
+    "audio_video": "4",
+    "marketing": "5",
+    "consulting": "6",
+    "translations": "7",
+    "other": "8"
+  }
+}

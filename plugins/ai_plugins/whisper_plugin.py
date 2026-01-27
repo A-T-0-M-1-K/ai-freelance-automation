@@ -1,262 +1,228 @@
-# plugins/ai_plugins/whisper_plugin.py
 """
-Whisper AI Plugin — integrates OpenAI Whisper (or compatible forks) for high-accuracy transcription.
-Implements the standard AI plugin interface for seamless integration with the AI service layer.
-Supports dynamic model loading, GPU/CPU fallback, and real-time performance monitoring.
+Whisper Plugin с контекстными менеджерами для предотвращения утечек памяти CUDA
 """
-
-import logging
-import os
-import time
-from pathlib import Path
-from typing import Optional, Dict, Any, Union
-
 import torch
-from transformers import pipeline
-from transformers.utils import is_offline_mode
+import logging
+from typing import Optional, Dict, Any
+from contextlib import contextmanager
+from transformers import WhisperProcessor, WhisperForConditionalRecognition
+from core.services.base_service import BaseService, ExecutionContext, ServiceResult
 
-from plugins.base_plugin import BaseAIPlugin
-from core.config.config import UnifiedConfigManager
-from core.monitoring.metrics_collector import MetricsCollector
-from core.security.audit_logger import AuditLogger
-from core.performance.intelligent_cache_system import IntelligentCacheSystem
-
-logger = logging.getLogger("WhisperPlugin")
+logger = logging.getLogger(__name__)
 
 
-class WhisperPlugin(BaseAIPlugin):
+class WhisperPlugin(BaseService):
     """
-    Whisper-based transcription plugin compliant with the AI plugin architecture.
-    Supports multiple model sizes (tiny, base, small, medium, large) and languages.
+    Плагин для работы с Whisper моделями с безопасным управлением памятью
     """
 
-    PLUGIN_NAME = "whisper"
-    SUPPORTED_TASKS = ["transcription", "audio_to_text"]
-    REQUIRED_CONFIG_KEYS = ["model_name", "device", "chunk_length_s", "language"]
+    def __init__(self, model_name: str = "openai/whisper-medium"):
+        super().__init__(service_name="whisper_plugin")
+        self.model_name = model_name
+        self.model: Optional[WhisperForConditionalRecognition] = None
+        self.processor: Optional[WhisperProcessor] = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    def __init__(self, config_manager: UnifiedConfigManager):
-        super().__init__()
-        self.config_manager = config_manager
-        self._config = self._load_config()
-        self._model = None
-        self._pipeline = None
-        self._is_loaded = False
-        self._metrics = MetricsCollector()
-        self._audit = AuditLogger()
-        self._cache = IntelligentCacheSystem()
-
-        self._validate_config()
-        logger.info(f"Intialized {self.PLUGIN_NAME} plugin with config: {self._config}")
-
-    def _load_config(self) -> Dict[str, Any]:
-        """Load plugin-specific configuration from ai_config.json or platform defaults."""
-        ai_config = self.config_manager.get("ai_config", {})
-        whisper_config = ai_config.get("whisper", {})
-
-        # Fallback to legacy if needed (for backward compatibility)
-        if not whisper_config:
-            whisper_config = self.config_manager.get("whisper_config", {})
-
-        # Default values
-        defaults = {
-            "model_name": "openai/whisper-medium",
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "chunk_length_s": 30,
-            "language": None,  # Auto-detect if None
-            "use_cache": True,
-            "max_workers": 1,
-            "torch_dtype": "float16" if torch.cuda.is_available() else "float32",
-        }
-
-        # Merge defaults with user config
-        for key, value in defaults.items():
-            whisper_config.setdefault(key, value)
-
-        return whisper_config
-
-    def _validate_config(self):
-        """Validate required keys and types."""
-        for key in self.REQUIRED_CONFIG_KEYS:
-            if key not in self._config:
-                raise ValueError(f"Missing required config key in whisper plugin: '{key}'")
-        if self._config["device"] not in ("cpu", "cuda", "mps"):
-            logger.warning(f"Unsupported device '{self._config['device']}', falling back to CPU")
-            self._config["device"] = "cpu"
-
-    def load_model(self) -> bool:
-        """Load Whisper model into memory. Idempotent and safe to call multiple times."""
-        if self._is_loaded:
-            return True
-
+    async def _load_dependencies(self):
+        """Безопасная загрузка модели с обработкой ошибок"""
         try:
-            self._audit.log("MODEL_LOAD_START", {"plugin": self.PLUGIN_NAME, "model": self._config["model_name"]})
+            logger.info(f"Загрузка Whisper модели '{self.model_name}' на устройстве {self.device}...")
 
-            model_kwargs = {}
-            if self._config["device"] == "cuda":
-                model_kwargs["torch_dtype"] = getattr(torch, self._config["torch_dtype"])
-                model_kwargs["use_flash_attention_2"] = False  # Optional optimization
+            # Использование контекстного менеджера для безопасной загрузки
+            async with self._cuda_memory_guard("model_loading"):
+                self.processor = WhisperProcessor.from_pretrained(self.model_name)
+                self.model = WhisperForConditionalRecognition.from_pretrained(self.model_name)
 
-            start_time = time.time()
+                if self.device == "cuda":
+                    self.model = self.model.to(self.device)
+                    self.model = self.model.half()  # FP16 для экономии памяти
 
-            # Use offline mode if no internet
-            local_files_only = is_offline_mode()
+            # Очистка кэша CUDA после загрузки
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
 
-            self._pipeline = pipeline(
-                "automatic-speech-recognition",
-                model=self._config["model_name"],
-                device=self._config["device"],
-                chunk_length_s=self._config["chunk_length_s"],
-                torch_dtype=model_kwargs.get("torch_dtype"),
-                local_files_only=local_files_only,
-            )
-
-            load_time = time.time() - start_time
-            self._metrics.record("model_load_time", load_time, tags={"model": "whisper"})
-            self._is_loaded = True
-
-            self._audit.log("MODEL_LOAD_SUCCESS", {
-                "plugin": self.PLUGIN_NAME,
-                "model": self._config["model_name"],
-                "device": self._config["device"],
-                "load_time_sec": round(load_time, 2)
-            })
-            logger.info(f"✅ Whisper model loaded on {self._config['device']} in {load_time:.2f}s")
-            return True
+            self._initialized = True
+            logger.info(f"Whisper модель '{self.model_name}' успешно загружена")
 
         except Exception as e:
-            self._audit.log("MODEL_LOAD_FAILURE", {
-                "plugin": self.PLUGIN_NAME,
-                "error": str(e),
-                "model": self._config["model_name"]
-            })
-            logger.error(f"❌ Failed to load Whisper model: {e}", exc_info=True)
-            return False
-
-    def transcribe(
-        self,
-        audio_path: Union[str, Path],
-        language: Optional[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Transcribe audio file to text.
-
-        Args:
-            audio_path (str | Path): Path to audio file (WAV, MP3, etc.)
-            language (str, optional): Force language (e.g., 'en', 'ru'). If None — auto-detect.
-            **kwargs: Additional args passed to pipeline (e.g., `return_timestamps`)
-
-        Returns:
-            dict: {
-                "text": str,
-                "segments": list[dict],  # if return_timestamps=True
-                "language": str,
-                "duration_sec": float,
-                "processing_time_sec": float
-            }
-        """
-        if not self._is_loaded:
-            if not self.load_model():
-                raise RuntimeError("Whisper model failed to load. Cannot transcribe.")
-
-        audio_path = Path(audio_path)
-        if not audio_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
-
-        cache_key = f"whisper_{audio_path.stem}_{language or 'auto'}"
-        if self._config.get("use_cache", True):
-            cached = self._cache.get(cache_key)
-            if cached:
-                logger.debug(f"📥 Cache hit for {audio_path}")
-                return cached
-
-        try:
-            self._audit.log("TRANSCRIPTION_START", {
-                "plugin": self.PLUGIN_NAME,
-                "audio_file": str(audio_path.name),
-                "language": language
-            })
-
-            start_time = time.time()
-            params = {
-                "return_timestamps": kwargs.get("return_timestamps", False),
-                "generate_kwargs": {}
-            }
-
-            if language:
-                params["generate_kwargs"]["language"] = language
-            elif self._config["language"]:
-                params["generate_kwargs"]["language"] = self._config["language"]
-
-            result = self._pipeline(str(audio_path), **params)
-            processing_time = time.time() - start_time
-
-            output = {
-                "text": result["text"].strip(),
-                "language": language or self._config["language"] or "auto",
-                "duration_sec": processing_time,
-                "processing_time_sec": round(processing_time, 2),
-            }
-
-            if "chunks" in result:
-                output["segments"] = result["chunks"]
-
-            # Cache result
-            if self._config.get("use_cache", True):
-                self._cache.set(cache_key, output, ttl=86400)  # 24h
-
-            self._metrics.record("transcription_duration", processing_time)
-            self._metrics.increment("transcriptions_total", tags={"success": "true"})
-
-            self._audit.log("TRANSCRIPTION_SUCCESS", {
-                "plugin": self.PLUGIN_NAME,
-                "audio_file": str(audio_path.name),
-                "chars": len(output["text"]),
-                "time_sec": round(processing_time, 2)
-            })
-
-            return output
-
-        except Exception as e:
-            self._metrics.increment("transcriptions_total", tags={"success": "false"})
-            self._audit.log("TRANSCRIPTION_ERROR", {
-                "plugin": self.PLUGIN_NAME,
-                "audio_file": str(audio_path.name),
-                "error": str(e)
-            })
-            logger.error(f"Transcription failed for {audio_path}: {e}", exc_info=True)
+            logger.error(f"Ошибка загрузки Whisper модели: {str(e)}")
+            # Обязательная очистка памяти даже при ошибках
+            await self._cleanup_cuda_memory()
             raise
 
-    def unload_model(self):
-        """Unload model from memory to free resources."""
-        if self._model or self._pipeline:
-            del self._pipeline
-            del self._model
-            self._pipeline = None
-            self._model = None
-            self._is_loaded = False
-            if torch.cuda.is_available():
+    @contextmanager
+    def _cuda_memory_guard(self, operation: str):
+        """
+        Контекстный менеджер для отслеживания использования памяти CUDA
+        и автоматической очистки при исключениях
+        """
+        if self.device != "cuda":
+            yield
+            return
+
+        try:
+            # Сохранение состояния памяти до операции
+            memory_before = torch.cuda.memory_allocated() / 1024 ** 2  # MB
+            logger.debug(f"[CUDA] Память до {operation}: {memory_before:.2f}MB")
+
+            yield
+
+            # Проверка утечек после операции
+            memory_after = torch.cuda.memory_allocated() / 1024 ** 2
+            delta = memory_after - memory_before
+
+            if delta > 100:  # Более 100MB утечка
+                logger.warning(f"[CUDA] Возможная утечка памяти в {operation}: +{delta:.2f}MB")
+
+            logger.debug(f"[CUDA] Память после {operation}: {memory_after:.2f}MB (дельта: {delta:+.2f}MB)")
+
+        except Exception as e:
+            logger.error(f"[CUDA] Ошибка в операции {operation}: {str(e)}")
+            # Принудительная очистка памяти при исключениях
+            torch.cuda.empty_cache()
+            raise
+
+    async def transcribe_audio(self, audio_path: str, language: str = "ru",
+                               context: Optional[ExecutionContext] = None) -> ServiceResult:
+        """
+        Транскрибация аудио с безопасным управлением памятью
+        """
+        if not self._initialized:
+            if not await self.initialize():
+                return ServiceResult.failure(
+                    error="Не удалось инициализировать Whisper модель",
+                    error_type="InitializationError",
+                    stack_trace="",
+                    context=context or ExecutionContext(task_id="unknown"),
+                    execution_time=0.0
+                )
+
+        start_time = time.time()
+
+        try:
+            # Безопасная обработка аудио с автоматической очисткой памяти
+            async with self._transcription_context(audio_path, language):
+                # Здесь будет логика транскрибации
+                result = await self._perform_transcription(audio_path, language, context)
+                return result
+
+        except Exception as e:
+            execution_time = time.time() - start_time
+            return ServiceResult.failure(
+                error=f"Ошибка транскрибации: {str(e)}",
+                error_type=type(e).__name__,
+                stack_trace="",
+                context=context or ExecutionContext(task_id="unknown"),
+                execution_time=execution_time,
+                rollback_required=True
+            )
+        finally:
+            # Гарантированная очистка памяти после каждой операции
+            if self.device == "cuda":
                 torch.cuda.empty_cache()
-            logger.info("🧹 Whisper model unloaded and memory freed.")
 
-    def get_capabilities(self) -> Dict[str, Any]:
-        """Return plugin metadata for service discovery."""
-        return {
-            "name": self.PLUGIN_NAME,
-            "version": "1.0.0",
-            "supported_tasks": self.SUPPORTED_TASKS,
-            "model": self._config["model_name"],
-            "device": self._config["device"],
-            "languages": ["auto", "en", "ru", "es", "fr", "de", "zh", "ja", "ko", "ar"],  # Extend as needed
-            "max_audio_duration_sec": 7200,  # 2 hours
-            "real_time": False,
-        }
+    @contextmanager
+    def _transcription_context(self, audio_path: str, language: str):
+        """
+        Контекстный менеджер для безопасной транскрибации
+        """
+        # Отслеживание использования памяти
+        if self.device == "cuda":
+            torch.cuda.reset_peak_memory_stats()
 
-    def health_check(self) -> Dict[str, Any]:
-        """Return health status for monitoring system."""
+        try:
+            logger.debug(f"Начало транскрибации: {audio_path}, язык: {language}")
+            yield
+            logger.debug("Транскрибация завершена успешно")
+
+        except Exception as e:
+            logger.error(f"Ошибка транскрибации {audio_path}: {str(e)}")
+            raise
+        finally:
+            # Вывод пикового использования памяти
+            if self.device == "cuda":
+                peak_memory = torch.cuda.max_memory_allocated() / 1024 ** 2
+                logger.debug(f"[CUDA] Пиковое использование памяти: {peak_memory:.2f}MB")
+                torch.cuda.empty_cache()
+
+    async def _perform_transcription(self, audio_path: str, language: str,
+                                     context: Optional[ExecutionContext]) -> ServiceResult:
+        """
+        Фактическая транскрибация аудио
+        """
+        import librosa
+
+        # Загрузка аудио
+        audio_array, sampling_rate = librosa.load(audio_path, sr=16000)
+
+        # Предобработка
+        inputs = self.processor(audio_array, sampling_rate=16000, return_tensors="pt")
+
+        if self.device == "cuda":
+            inputs = inputs.to(self.device)
+
+        # Генерация транскрипции
+        with torch.no_grad():  # Отключение градиентов для экономии памяти
+            predicted_ids = self.model.generate(
+                inputs.input_features,
+                language=language,
+                max_length=448  # Ограничение длины для предотвращения OOM
+            )
+
+        # Декодирование
+        transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+
+        return ServiceResult.success(
+            data={"text": transcription, "language": language, "audio_path": audio_path},
+            context=context or ExecutionContext(task_id="unknown"),
+            execution_time=0.0  # Будет установлено в основном методе
+        )
+
+    async def cleanup(self):
+        """Полная очистка ресурсов модели"""
+        if self.model is not None:
+            del self.model
+            self.model = None
+
+        if self.processor is not None:
+            del self.processor
+            self.processor = None
+
+        await self._cleanup_cuda_memory()
+        self._initialized = False
+        logger.info("Whisper плагин: ресурсы полностью освобождены")
+
+    async def _cleanup_cuda_memory(self):
+        """Очистка памяти CUDA"""
+        if self.device == "cuda":
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats()
+                logger.debug("[CUDA] Память очищена")
+            except Exception as e:
+                logger.warning(f"Ошибка очистки памяти CUDA: {str(e)}")
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Проверка здоровья плагина"""
+        base_health = await super().health_check()
+
+        cuda_info = {}
+        if self.device == "cuda":
+            try:
+                cuda_info = {
+                    "cuda_available": torch.cuda.is_available(),
+                    "device_name": torch.cuda.get_device_name(0),
+                    "memory_allocated_mb": torch.cuda.memory_allocated() / 1024 ** 2,
+                    "memory_reserved_mb": torch.cuda.memory_reserved() / 1024 ** 2,
+                    "memory_free_mb": torch.cuda.mem_get_info()[0] / 1024 ** 2
+                }
+            except Exception as e:
+                cuda_info = {"error": str(e)}
+
         return {
-            "status": "healthy" if self._is_loaded else "unloaded",
-            "model_loaded": self._is_loaded,
-            "device": self._config["device"],
-            "last_error": None  # Could be extended with error history
+            **base_health,
+            "model_loaded": self._initialized,
+            "model_name": self.model_name,
+            "device": self.device,
+            "cuda_info": cuda_info
         }

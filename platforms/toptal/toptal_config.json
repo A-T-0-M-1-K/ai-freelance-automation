@@ -1,0 +1,62 @@
+{
+  "name": "Toptal",
+  "base_url": "https://www.toptal.com",
+  "api_base_url": "https://api.toptal.com/v1",
+  "platform_type": "premium_network",
+  "auth_method": "token",
+  "api_version": "v1",
+
+  "endpoints": {
+    "search_jobs": "jobs",
+    "get_job": "jobs/{job_id}",
+    "apply_job": "jobs/{job_id}/applications",
+    "my_applications": "applications",
+    "profile": "profile",
+    "screening": "screening"
+  },
+
+  "field_mapping": {
+    "title": "title",
+    "description": "description",
+    "budget": "budget",
+    "currency": "currency",
+    "deadline": "deadline",
+    "skills": "skills",
+    "client_rating": "client.rating",
+    "job_type": "type",
+    "experience_level": "experience_level",
+    "location": "location",
+    "posted_date": "posted_at",
+    "proposals_count": "applications_count",
+    "job_id": "id"
+  },
+
+  "auth_params": {
+    "token": "YOUR_TOPTAL_API_TOKEN",
+    "token_type": "Bearer"
+  },
+
+  "default_headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "AI-Freelance-Automation/1.0"
+  },
+
+  "pagination": {
+    "param": "page",
+    "size_param": "per_page",
+    "default_size": 10
+  },
+
+  "rate_limit": {
+    "requests_per_minute": 30,
+    "requests_per_hour": 500
+  },
+
+  "screening_requirements": {
+    "minimum_test_score": 80,
+    "english_proficiency": "fluent",
+    "portfolio_required": true,
+    "experience_years": 3
+  }
+}

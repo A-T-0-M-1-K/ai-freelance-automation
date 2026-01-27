@@ -1,0 +1,68 @@
+{
+  "name": "LinkedIn ProFinder",
+  "base_url": "https://www.linkedin.com/profinder",
+  "api_base_url": "https://api.linkedin.com/v2/profinder",
+  "platform_type": "b2b_platform",
+  "auth_method": "oauth2",
+  "api_version": "v2",
+
+  "endpoints": {
+    "search_projects": "projects",
+    "get_project": "projects/{project_id}",
+    "submit_proposal": "projects/{project_id}/proposals",
+    "my_proposals": "proposals",
+    "profile": "profile",
+    "leads": "leads"
+  },
+
+  "field_mapping": {
+    "title": "title",
+    "description": "description",
+    "budget": "budget_range.max",
+    "currency": "currency",
+    "deadline": "deadline",
+    "skills": "skills",
+    "client_rating": "client.rating",
+    "job_type": "project_type",
+    "experience_level": "experience_level",
+    "location": "client.location",
+    "posted_date": "created_time",
+    "proposals_count": "proposal_count",
+    "job_id": "id"
+  },
+
+  "auth_params": {
+    "client_id": "YOUR_LINKEDIN_CLIENT_ID",
+    "client_secret": "YOUR_LINKEDIN_CLIENT_SECRET",
+    "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
+    "redirect_uri": "http://localhost:8080/linkedin/callback",
+    "scopes": ["r_liteprofile", "r_emailaddress", "w_member_social"]
+  },
+
+  "default_headers": {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-Restli-Protocol-Version": "2.0.0"
+  },
+
+  "pagination": {
+    "param": "start",
+    "size_param": "count",
+    "default_size": 10
+  },
+
+  "rate_limit": {
+    "requests_per_minute": 100,
+    "requests_per_hour": 2000
+  },
+
+  "project_types": [
+    "web_development",
+    "mobile_development",
+    "design",
+    "marketing",
+    "writing",
+    "consulting",
+    "data_science"
+  ]
+}
