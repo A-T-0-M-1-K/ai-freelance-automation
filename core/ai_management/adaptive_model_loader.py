@@ -1,7 +1,6 @@
-# Файл: core/ai_management/adaptive_model_loader.py
 """
-Адаптивная система загрузки моделей ИИ с автоматическим выбором оптимальной конфигурации
-под доступные ресурсы устройства (ПК/ноутбук без дискретной видеокарты)
+Адаптивная система загрузки моделей ИИ с автоматической адаптацией
+под возможности устройства пользователя (ПК/ноутбук без дискретной видеокарты)
 """
 import os
 import psutil
@@ -10,7 +9,8 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from enum import Enum
-from transformers import AutoModel, AutoTokenizer, pipeline
+from dataclasses import dataclass
+from transformers import AutoModel, AutoTokenizer, pipeline, BitsAndBytesConfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +56,12 @@ class AdaptiveModelLoader:
         self.loaded_models: Dict[str, Any] = {}
         self.model_variants: Dict[str, Dict[str, str]] = self._define_model_variants()
 
-        logger.info(f"Обнаружен профиль устройства: {self.device_profile.capability.value}")
-        logger.info(f"Рекомендуемый вариант моделей: {self.device_profile.recommended_variant.value}")
+        logger.info(f"✅ Обнаружен профиль устройства: {self.device_profile.capability.value}")
+        logger.info(f"✅ Рекомендуемый вариант моделей: {self.device_profile.recommended_variant.value}")
         logger.info(
-            f"Доступно ОЗУ: {self.device_profile.available_ram_gb:.1f} ГБ из {self.device_profile.total_ram_gb:.1f} ГБ")
+            f"✅ Доступно ОЗУ: {self.device_profile.available_ram_gb:.1f} ГБ из {self.device_profile.total_ram_gb:.1f} ГБ")
         if self.device_profile.has_gpu:
-            logger.info(f"GPU: {self.device_profile.gpu_name} с {self.device_profile.gpu_vram_gb:.1f} ГБ VRAM")
+            logger.info(f"✅ GPU: {self.device_profile.gpu_name} с {self.device_profile.gpu_vram_gb:.1f} ГБ VRAM")
 
     def _detect_device_capabilities(self) -> DeviceProfile:
         """Автоматическое определение характеристик устройства"""
@@ -79,7 +79,7 @@ class AdaptiveModelLoader:
             gpu_name = torch.cuda.get_device_name(0)
             gpu_vram = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
 
-        # Классификация устройства
+        # Классификация устройства с учетом реальных возможностей
         if has_gpu and gpu_vram >= 8.0:
             capability = DeviceCapability.HIGH_END_GPU
             recommended_variant = ModelVariant.FULL
@@ -92,6 +92,9 @@ class AdaptiveModelLoader:
         elif total_ram >= 16.0:
             capability = DeviceCapability.CPU_ONLY
             recommended_variant = ModelVariant.DISTILLED
+        elif total_ram >= 8.0:
+            capability = DeviceCapability.CPU_ONLY
+            recommended_variant = ModelVariant.QUANTIZED_INT4
         else:
             capability = DeviceCapability.CPU_ONLY
             recommended_variant = ModelVariant.QUANTIZED_INT4
@@ -114,25 +117,25 @@ class AdaptiveModelLoader:
                 "full": "bert-base-multilingual",
                 "distilled": "distilbert-base-multilingual-cased",
                 "quantized_int8": "bert-base-multilingual-int8",
-                "quantized_int4": "bert-base-multilingual-int4"
+                "quantized_int4": "distilbert-base-multilingual-cased-int4"
             },
             "textgen": {
                 "full": "gpt2-medium",
                 "distilled": "gpt2",
                 "quantized_int8": "gpt2-medium-int8",
-                "quantized_int4": "gpt2-medium-int4"
+                "quantized_int4": "gpt2-int4"
             },
             "translation": {
                 "full": "nllb-200",
                 "distilled": "nllb-200-distilled-600M",
-                "quantized_int8": "nllb-200-int8",
-                "quantized_int4": "nllb-200-int4"
+                "quantized_int8": "nllb-200-distilled-600M-int8",
+                "quantized_int4": "nllb-200-distilled-600M-int4"
             },
             "whisper": {
                 "full": "whisper-medium",
                 "distilled": "whisper-small",
-                "quantized_int8": "whisper-medium-int8",
-                "quantized_int4": "whisper-small-int4"
+                "quantized_int8": "whisper-small-int8",
+                "quantized_int4": "whisper-tiny-int4"
             }
         }
 
@@ -168,19 +171,19 @@ class AdaptiveModelLoader:
                 # Автоматический фолбэк на доступный вариант
                 model_path, detected_variant = self.get_optimal_variant(model_type)
                 logger.warning(
-                    f"Вариант {variant_name} недоступен для {model_type}, используется {detected_variant.value}")
+                    f"⚠️ Вариант {variant_name} недоступен для {model_type}, используется {detected_variant.value}")
         else:
             model_path, variant = self.get_optimal_variant(model_type)
 
         # Проверка существования модели на диске
         full_path = self.base_model_dir / model_path
         if not full_path.exists():
-            logger.info(f"Модель {model_path} отсутствует, запускается автоматическая загрузка...")
+            logger.info(f"📥 Модель {model_path} отсутствует, запускается автоматическая загрузка...")
             await self._download_model(model_type, variant)
 
         # Загрузка модели с оптимальными параметрами
         logger.info(
-            f"Загрузка модели {model_type} ({variant.value}) для устройства {self.device_profile.capability.value}")
+            f"⚙️ Загрузка модели {model_type} ({variant.value}) для устройства {self.device_profile.capability.value}")
 
         try:
             if model_type == "embedding":
@@ -192,12 +195,12 @@ class AdaptiveModelLoader:
             elif model_type == "whisper":
                 return self._load_whisper_model(full_path, variant)
             else:
-                raise ValueError(f"Неизвестный тип модели: {model_type}")
+                raise ValueError(f"❌ Неизвестный тип модели: {model_type}")
 
         except RuntimeError as e:
             if "out of memory" in str(e).lower() or "cuda out of memory" in str(e).lower():
                 logger.warning(
-                    f"Недостаточно памяти для загрузки {model_type} ({variant.value}), пробуем более легкий вариант...")
+                    f"MemoryWarning️ Недостаточно памяти для загрузки {model_type} ({variant.value}), пробуем более легкий вариант...")
                 # Автоматический переход на более легкий вариант
                 lighter_variants = {
                     ModelVariant.FULL: ModelVariant.QUANTIZED_INT8,
@@ -220,21 +223,25 @@ class AdaptiveModelLoader:
             load_kwargs["load_in_8bit"] = True
         elif variant == ModelVariant.QUANTIZED_INT4:
             load_kwargs["load_in_4bit"] = True
+            load_kwargs["bnb_4bit_compute_dtype"] = torch.float16 if device == "cuda" else torch.float32
+            load_kwargs["bnb_4bit_quant_type"] = "nf4"
+            load_kwargs["bnb_4bit_use_double_quant"] = True
 
         # Загрузка модели
         model = AutoModel.from_pretrained(
             str(path),
             device_map="auto" if device == "cuda" else None,
+            torch_dtype=torch.float16 if device == "cuda" and variant != ModelVariant.QUANTIZED_INT4 else torch.float32,
             **load_kwargs
         )
         tokenizer = AutoTokenizer.from_pretrained(str(path))
 
         # Оптимизация для CPU
-        if device == "cpu" and variant != ModelVariant.QUANTIZED_INT4:
+        if device == "cpu" and variant == ModelVariant.DISTILLED:
             model = torch.quantization.quantize_dynamic(
                 model, {torch.nn.Linear}, dtype=torch.qint8
             )
-            logger.info("Применено динамическое квантование для CPU")
+            logger.info("✅ Применено динамическое квантование для CPU")
 
         return {"model": model, "tokenizer": tokenizer, "device": device, "variant": variant.value}
 
@@ -243,19 +250,34 @@ class AdaptiveModelLoader:
         device = "cuda" if self.device_profile.has_gpu and self.device_profile.gpu_vram_gb >= 3.0 else "cpu"
 
         # Ограничение длины генерации в зависимости от возможностей устройства
-        max_length = {
+        max_length_config = {
             DeviceCapability.HIGH_END_GPU: 1024,
             DeviceCapability.MID_RANGE_GPU: 512,
             DeviceCapability.INTEGRATED_GPU: 256,
             DeviceCapability.CPU_ONLY: 128
-        }.get(self.device_profile.capability, 256)
+        }
+        max_length = max_length_config.get(self.device_profile.capability, 256)
+
+        # Настройки квантования
+        quantization_config = None
+        if variant in [ModelVariant.QUANTIZED_INT8, ModelVariant.QUANTIZED_INT4]:
+            quantization_config = BitsAndBytesConfig(
+                load_in_8bit=(variant == ModelVariant.QUANTIZED_INT8),
+                load_in_4bit=(variant == ModelVariant.QUANTIZED_INT4),
+                bnb_4bit_compute_dtype=torch.float16 if device == "cuda" else torch.float32,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True
+            )
 
         return pipeline(
             "text-generation",
             model=str(path),
+            tokenizer=str(path),
             device=0 if device == "cuda" else -1,
             max_length=max_length,
-            torch_dtype=torch.float16 if device == "cuda" and variant != ModelVariant.QUANTIZED_INT4 else torch.float32
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            quantization_config=quantization_config,
+            model_kwargs={"low_cpu_mem_usage": True}
         )
 
     def _load_whisper_model(self, path: Path, variant: ModelVariant):
@@ -263,7 +285,13 @@ class AdaptiveModelLoader:
         device = "cuda" if self.device_profile.has_gpu and self.device_profile.gpu_vram_gb >= 2.0 else "cpu"
 
         # Выбор размера модели в зависимости от памяти
-        model_size = "medium" if self.device_profile.gpu_vram_gb and self.device_profile.gpu_vram_gb >= 4.0 else "small"
+        model_size_map = {
+            ModelVariant.FULL: "medium",
+            ModelVariant.QUANTIZED_INT8: "small",
+            ModelVariant.QUANTIZED_INT4: "base",
+            ModelVariant.DISTILLED: "tiny"
+        }
+        model_size = model_size_map.get(variant, "small")
 
         return pipeline(
             "automatic-speech-recognition",
@@ -271,19 +299,22 @@ class AdaptiveModelLoader:
             device=0 if device == "cuda" else -1,
             torch_dtype=torch.float16 if device == "cuda" else torch.float32,
             chunk_length_s=30,  # Оптимизация для слабых устройств
-            stride_length_s=5
+            stride_length_s=5,
+            return_timestamps=True
         )
 
     async def _download_model(self, model_type: str, variant: ModelVariant):
         """Автоматическая загрузка модели с прогресс-баром"""
-        import huggingface_hub
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
+            raise ImportError("❌ Требуется установка: pip install huggingface-hub")
 
         model_map = {
             "embedding": {
                 "full": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                 "distilled": "sentence-transformers/distiluse-base-multilingual-cased-v1",
                 "quantized_int8": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-                # Квантование при загрузке
                 "quantized_int4": "sentence-transformers/distiluse-base-multilingual-cased-v1"
             },
             "textgen": {
@@ -302,20 +333,20 @@ class AdaptiveModelLoader:
                 "full": "openai/whisper-medium",
                 "distilled": "openai/whisper-small",
                 "quantized_int8": "openai/whisper-small",
-                "quantized_int4": "openai/whisper-small"
+                "quantized_int4": "openai/whisper-tiny"
             }
         }
 
         model_name = model_map[model_type][variant.value]
         save_path = self.base_model_dir / self.model_variants[model_type][variant.value]
 
-        logger.info(f"Загрузка модели {model_name} в {save_path}...")
+        logger.info(f"📥 Загрузка модели {model_name} в {save_path}...")
 
         # Создание директории
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Загрузка с прогрессом
-        huggingface_hub.snapshot_download(
+        snapshot_download(
             repo_id=model_name,
             local_dir=str(save_path),
             progress=True
@@ -325,32 +356,40 @@ class AdaptiveModelLoader:
         if variant in [ModelVariant.QUANTIZED_INT8, ModelVariant.QUANTIZED_INT4]:
             await self._apply_quantization(save_path, variant)
 
-        logger.info(f"Модель {model_type} ({variant.value}) успешно загружена в {save_path}")
+        logger.info(f"✅ Модель {model_type} ({variant.value}) успешно загружена в {save_path}")
 
     async def _apply_quantization(self, model_path: Path, variant: ModelVariant):
         """Применение квантования к загруженной модели"""
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            from transformers import BitsAndBytesConfig
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
             # Загрузка модели для квантования
             model = AutoModelForCausalLM.from_pretrained(str(model_path))
             tokenizer = AutoTokenizer.from_pretrained(str(model_path))
 
-            # Применение квантования
-            if variant == ModelVariant.QUANTIZED_INT8:
-                quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-            else:  # QUANTIZED_INT4
-                quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-
             # Сохранение квантованной модели
-            model.save_pretrained(str(model_path), quantization_config=quantization_config)
+            if variant == ModelVariant.QUANTIZED_INT8:
+                model.save_pretrained(
+                    str(model_path),
+                    quantization_config=BitsAndBytesConfig(load_in_8bit=True)
+                )
+            else:  # QUANTIZED_INT4
+                model.save_pretrained(
+                    str(model_path),
+                    quantization_config=BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_use_double_quant=True
+                    )
+                )
+
             tokenizer.save_pretrained(str(model_path))
 
-            logger.info(f"Квантование {variant.value} применено к модели в {model_path}")
+            logger.info(f"✅ Квантование {variant.value} применено к модели в {model_path}")
 
         except Exception as e:
-            logger.warning(f"Ошибка квантования модели: {str(e)}. Используется оригинальная модель.")
+            logger.warning(f"⚠️ Ошибка квантования модели: {str(e)}. Используется оригинальная модель.")
 
     def get_performance_recommendations(self) -> Dict[str, Any]:
         """Получение рекомендаций по оптимизации производительности"""
@@ -433,7 +472,7 @@ class AdaptiveModelLoader:
         """Очистка памяти от неиспользуемых моделей"""
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            logger.info("Очистка кэша CUDA выполнена")
+            logger.info("🧹 Очистка кэша CUDA выполнена")
 
         # Выгрузка моделей, не использовавшихся более 15 минут
         current_time = psutil.time()
@@ -446,15 +485,16 @@ class AdaptiveModelLoader:
 
         for model_name in models_to_unload:
             del self.loaded_models[model_name]
-            logger.info(f"Модель {model_name} выгружена из памяти для освобождения ресурсов")
+            logger.info(f"📤 Модель {model_name} выгружена из памяти для освобождения ресурсов")
 
     def health_check(self) -> Dict[str, Any]:
         """Проверка здоровья системы загрузки моделей"""
         return {
+            "status": "healthy",
             "device_profile": self.device_profile.capability.value,
             "available_ram_gb": round(self.device_profile.available_ram_gb, 1),
             "loaded_models": list(self.loaded_models.keys()),
             "gpu_available": self.device_profile.has_gpu,
             "gpu_vram_gb": round(self.device_profile.gpu_vram_gb, 1) if self.device_profile.gpu_vram_gb else None,
-            "recommendations": self.get_performance_recommendations()["recommendations"][:3]  # Первые 3 рекомендации
+            "recommendations": self.get_performance_recommendations()["recommendations"][:3]
         }

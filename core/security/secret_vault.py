@@ -1,4 +1,3 @@
-# Файл: core/security/secret_vault.py (полная реализация)
 """
 Многоуровневое хранилище секретов с поддержкой:
 - Шифрования секретов на уровне приложения (AES-GCM)
@@ -48,15 +47,15 @@ class SecretVault:
             try:
                 self._init_vault_client(vault_url, os.environ.get(vault_token_env_var))
                 self.vault_enabled = True
-                logger.info("Интеграция с HashiCorp Vault успешно инициализирована")
+                logger.info("✅ Интеграция с HashiCorp Vault успешно инициализирована")
             except Exception as e:
-                logger.warning(f"Ошибка инициализации Vault: {str(e)}. Используется локальное хранилище.")
+                logger.warning(f"⚠️ Ошибка инициализации Vault: {str(e)}. Используется локальное хранилище.")
 
         # Генерация временного ключа для режима разработки (ТОЛЬКО для разработки!)
         if not self.master_key and not self.vault_enabled:
             if os.environ.get("ENVIRONMENT", "development") == "development":
                 logger.warning(
-                    "⚠️  MASTER KEY не найден в переменных окружения. "
+                    "⚠️ MASTER KEY не найден в переменных окружения. "
                     "Генерация ВРЕМЕННОГО ключа для режима разработки. "
                     "НИКОГДА НЕ ИСПОЛЬЗУЙТЕ В ПРОДАКШЕНЕ!"
                 )
@@ -65,14 +64,14 @@ class SecretVault:
                 os.environ[master_key_env_var] = base64.b64encode(self.master_key).decode('utf-8')
             else:
                 raise ValueError(
-                    "КРИТИЧЕСКАЯ ОШИБКА: MASTER KEY не найден в продакшен-окружении. "
+                    "❌ КРИТИЧЕСКАЯ ОШИБКА: MASTER KEY не найден в продакшен-окружении. "
                     "Установите переменную окружения AIFA_MASTER_KEY перед запуском системы."
                 )
 
         # Автоматическая миграция существующих секретов
         self._auto_migrate_legacy_secrets()
 
-        logger.info("Инициализировано безопасное хранилище секретов")
+        logger.info("✅ Инициализировано безопасное хранилище секретов")
 
     def _load_master_key(self, env_var: str) -> Optional[bytes]:
         """Загрузка мастер-ключа из переменных окружения"""
@@ -88,7 +87,7 @@ class SecretVault:
                 if file_path.exists():
                     return file_path.read_bytes()
                 else:
-                    logger.error(f"Файл ключа не найден: {file_path}")
+                    logger.error(f"❌ Файл ключа не найден: {file_path}")
                     return None
             else:
                 return key.encode('utf-8')
@@ -107,7 +106,7 @@ class SecretVault:
 
             # Проверка работоспособности
             if not self.vault_client.is_authenticated():
-                raise Exception("Не удалось аутентифицироваться в Vault")
+                raise Exception("❌ Не удалось аутентифицироваться в Vault")
 
             # Создание секретного пути если не существует
             if not self.vault_client.sys.list_mounted_secrets_engines().get('aifa/'):
@@ -117,10 +116,10 @@ class SecretVault:
                     options={'version': '2'}
                 )
         except ImportError:
-            logger.warning("Библиотека hvac не установлена. Используется локальное хранилище.")
+            logger.warning("⚠️ Библиотека hvac не установлена. Используется локальное хранилище.")
             self.vault_client = None
         except Exception as e:
-            logger.warning(f"Ошибка инициализации Vault: {str(e)}")
+            logger.warning(f"⚠️ Ошибка инициализации Vault: {str(e)}")
             self.vault_client = None
 
     def _derive_key(self, context: str) -> bytes:
@@ -155,7 +154,7 @@ class SecretVault:
                 )
                 return f"vault:{context}"
             except Exception as e:
-                logger.warning(f"Ошибка сохранения в Vault: {str(e)}. Используется локальное шифрование.")
+                logger.warning(f"⚠️ Ошибка сохранения в Vault: {str(e)}. Используется локальное шифрование.")
 
         # Локальное шифрование как резервный вариант
         key = self._derive_key(context)
@@ -181,17 +180,16 @@ class SecretVault:
                     secret = self.vault_client.secrets.kv.v2.read_secret_version(path=f"aifa/{vault_path}")
                     return secret['data']['data']['value']
                 except Exception as e:
-                    logger.error(f"Ошибка загрузки из Vault: {str(e)}")
-                    raise ValueError("Не удалось загрузить секрет из внешнего хранилища")
+                    logger.error(f"❌ Ошибка загрузки из Vault: {str(e)}")
+                    raise ValueError("❌ Не удалось загрузить секрет из внешнего хранилища")
             else:
-                raise ValueError("Секрет хранится во внешнем хранилище, но интеграция недоступна")
+                raise ValueError("❌ Секрет хранится во внешнем хранилище, но интеграция недоступна")
 
         # Обработка локально зашифрованных секретов
         if not encrypted.startswith("aesgcm_v2:"):
             # Поддержка старого формата для обратной совместимости
             if encrypted.startswith("aesgcm:"):
-                logger.warning(
-                    f"Обнаружен устаревший формат шифрования для контекста {context}. Выполняется миграция...")
+                logger.warning(f"⚠️ Обнаружен устаревший формат шифрования для контекста {context}. Выполняется миграция...")
                 # Расшифровка старым методом (без аутентификации)
                 encrypted_data = base64.b64decode(encrypted[7:])
                 nonce = encrypted_data[:12]
@@ -205,10 +203,10 @@ class SecretVault:
                     new_encrypted = self.encrypt(plaintext.decode('utf-8'), context)
                     return plaintext.decode('utf-8')
                 except Exception as e:
-                    logger.error(f"Ошибка расшифровки старого формата: {str(e)}")
+                    logger.error(f"❌ Ошибка расшифровки старого формата: {str(e)}")
                     raise
             else:
-                raise ValueError(f"Неподдерживаемый формат шифрования: {encrypted[:10]}")
+                raise ValueError(f"❌ Неподдерживаемый формат шифрования: {encrypted[:10]}")
 
         # Расшифровка нового формата
         encrypted_data = base64.b64decode(encrypted[10:])
@@ -222,9 +220,9 @@ class SecretVault:
             plaintext = aesgcm.decrypt(nonce, ciphertext, None)
             return plaintext.decode('utf-8')
         except InvalidTag:
-            raise ValueError("Ошибка проверки целостности данных. Возможна атака или повреждение данных.")
+            raise ValueError("❌ Ошибка проверки целостности данных. Возможна атака или повреждение данных.")
         except Exception as e:
-            raise ValueError(f"Ошибка расшифровки: {str(e)}")
+            raise ValueError(f"❌ Ошибка расшифровки: {str(e)}")
 
     def store_secret(self, key: str, value: str, context: Optional[str] = None, ttl_days: Optional[int] = None):
         """Сохранение секрета в зашифрованном виде"""
@@ -262,7 +260,7 @@ class SecretVault:
                 file_data = aesgcm.decrypt(nonce, ciphertext, None)
                 secrets_data = json.loads(file_data.decode('utf-8'))
             except Exception as e:
-                logger.warning(f"Ошибка загрузки секретов: {str(e)}. Создается новый файл.")
+                logger.warning(f"⚠️ Ошибка загрузки секретов: {str(e)}. Создается новый файл.")
 
         # Обновление или добавление секрета
         secrets_data[key] = secret_info
@@ -284,7 +282,7 @@ class SecretVault:
         # Кэширование для быстрого доступа
         self.secrets_cache[key] = value
 
-        logger.info(f"Секрет '{key}' сохранен в зашифрованном виде")
+        logger.info(f"✅ Секрет '{key}' сохранен в зашифрованном виде")
         self.audit_access(key, "system", "store")
 
     def get_secret(self, key: str, default: Any = None) -> Any:
@@ -319,7 +317,7 @@ class SecretVault:
                     stored_at = datetime.fromisoformat(secret_info["stored_at"])
                     ttl = timedelta(days=secret_info["ttl_days"])
                     if datetime.now() - stored_at > ttl:
-                        logger.warning(f"Секрет '{key}' истек ({ttl_days} дней). Требуется обновление.")
+                        logger.warning(f"⚠️ Секрет '{key}' истек ({ttl_days} дней). Требуется обновление.")
                         return default
 
                 encrypted_value = secret_info["value"]
@@ -333,20 +331,20 @@ class SecretVault:
                 return value
 
         except Exception as e:
-            logger.error(f"Ошибка получения секрета '{key}': {str(e)}")
+            logger.error(f"❌ Ошибка получения секрета '{key}': {str(e)}")
             # Попытка восстановления из резервной копии
             backup_path = secrets_path.with_suffix('.bak')
             if backup_path.exists():
-                logger.info(f"Попытка восстановления секретов из резервной копии: {backup_path}")
+                logger.info(f"🔄 Попытка восстановления секретов из резервной копии: {backup_path}")
                 try:
                     backup_path.replace(secrets_path)
                     return self.get_secret(key, default)
                 except Exception as be:
-                    logger.error(f"Ошибка восстановления из резервной копии: {str(be)}")
+                    logger.error(f"❌ Ошибка восстановления из резервной копии: {str(be)}")
 
         return default
 
-    def _increment_access_count(self, key: str, secrets_data: Optional[Dict] = None):
+    def _increment_access_count(self, key: str, secrets_ Optional[Dict] = None):
         """Инкремент счетчика доступа к секрету"""
         secrets_path = Path("data/secrets.json")
         if not secrets_path.exists():
@@ -380,16 +378,16 @@ class SecretVault:
                     f.write(encrypted_file)
 
         except Exception as e:
-            logger.warning(f"Ошибка обновления счетчика доступа: {str(e)}")
+            logger.warning(f"⚠️ Ошибка обновления счетчика доступа: {str(e)}")
 
     def rotate_keys(self):
         """Ротация ключей шифрования с сохранением доступа к существующим секретам"""
         if datetime.now() - self.last_rotation < self.rotation_interval:
             days_remaining = (self.rotation_interval - (datetime.now() - self.last_rotation)).days
-            logger.info(f"Ротация ключей не требуется. Следующая ротация через {days_remaining} дней.")
+            logger.info(f"ℹ️ Ротация ключей не требуется. Следующая ротация через {days_remaining} дней.")
             return
 
-        logger.info("Начата ротация ключей шифрования...")
+        logger.info("🔄 Начата ротация ключей шифрования...")
 
         # Создание резервной копии перед ротацией
         secrets_path = Path("data/secrets.json")
@@ -397,15 +395,14 @@ class SecretVault:
             backup_path = secrets_path.with_suffix(f'.bak.{datetime.now().strftime("%Y%m%d_%H%M%S")}')
             import shutil
             shutil.copy2(secrets_path, backup_path)
-            logger.info(f"Резервная копия создана: {backup_path}")
+            logger.info(f"✅ Резервная копия создана: {backup_path}")
 
         # Генерация нового мастер-ключа (в продакшене — из внешнего источника)
         old_master_key = self.master_key
-        self.master_key = self._generate_temporary_master_key() if os.environ.get(
-            "ENVIRONMENT") == "development" else self._load_master_key("AIFA_MASTER_KEY_NEW")
+        self.master_key = self._generate_temporary_master_key() if os.environ.get("ENVIRONMENT") == "development" else self._load_master_key("AIFA_MASTER_KEY_NEW")
 
         if not self.master_key:
-            logger.error("Невозможно выполнить ротацию: новый мастер-ключ не доступен")
+            logger.error("❌ Невозможно выполнить ротацию: новый мастер-ключ не доступен")
             self.master_key = old_master_key
             return
 
@@ -446,7 +443,7 @@ class SecretVault:
                     secret_info["value"] = new_value
                     secret_info["rotated_at"] = datetime.now().isoformat()
                 except Exception as e:
-                    logger.error(f"Ошибка перешиврования секрета '{key}': {str(e)}. Секрет сохранен в старом формате.")
+                    logger.error(f"❌ Ошибка перешиврования секрета '{key}': {str(e)}. Секрет сохранен в старом формате.")
 
             # Шифрование обновленного файла новым ключом
             file_data = json.dumps(secrets_data, ensure_ascii=False, indent=2).encode('utf-8')
@@ -462,16 +459,16 @@ class SecretVault:
             self.secrets_cache = {}
 
             self.last_rotation = datetime.now()
-            logger.info("Ротация ключей шифрования успешно завершена")
+            logger.info("✅ Ротация ключей шифрования успешно завершена")
 
         except Exception as e:
-            logger.error(f"КРИТИЧЕСКАЯ ОШИБКА при ротации ключей: {str(e)}")
-            logger.error("Восстановление из резервной копии...")
+            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА при ротации ключей: {str(e)}")
+            logger.error("🔄 Восстановление из резервной копии...")
             # Восстановление из последней резервной копии
             backups = sorted(secrets_path.parent.glob('*.bak.*'), key=os.path.getmtime, reverse=True)
             if backups:
                 backups[0].replace(secrets_path)
-                logger.info(f"Восстановление из резервной копии: {backups[0]}")
+                logger.info(f"✅ Восстановление из резервной копии: {backups[0]}")
             self.master_key = old_master_key
 
     def _auto_migrate_legacy_secrets(self):
@@ -481,7 +478,7 @@ class SecretVault:
         if migration_flag.exists():
             return
 
-        logger.info("Обнаружена первая инициализация — запуск автоматической миграции секретов...")
+        logger.info("🔄 Обнаружена первая инициализация — запуск автоматической миграции секретов...")
 
         # Миграция секретов платформ
         platforms_path = Path("config/platforms.json")
@@ -506,9 +503,9 @@ class SecretVault:
                     json.dump(platforms, f, ensure_ascii=False, indent=2)
 
                 if migrated > 0:
-                    logger.info(f"Мигрировано {migrated} секретов платформ в защищенное хранилище")
+                    logger.info(f"✅ Мигрировано {migrated} секретов платформ в защищенное хранилище")
             except Exception as e:
-                logger.error(f"Ошибка миграции секретов платформ: {str(e)}")
+                logger.error(f"❌ Ошибка миграции секретов платформ: {str(e)}")
 
         # Миграция секретов безопасности
         security_path = Path("config/security.json")
@@ -537,9 +534,9 @@ class SecretVault:
                     json.dump(security, f, ensure_ascii=False, indent=2)
 
                 if migrated > 0:
-                    logger.info(f"Мигрировано {migrated} секретов безопасности в защищенное хранилище")
+                    logger.info(f"✅ Мигрировано {migrated} секретов безопасности в защищенное хранилище")
             except Exception as e:
-                logger.error(f"Ошибка миграции секретов безопасности: {str(e)}")
+                logger.error(f"❌ Ошибка миграции секретов безопасности: {str(e)}")
 
         # Удаление статических SSL сертификатов из репозитория
         cert_path = Path("docker/nginx/ssl/cert.pem")
@@ -547,16 +544,16 @@ class SecretVault:
 
         if cert_path.exists() and "localhost" in cert_path.read_text():
             cert_path.unlink()
-            logger.warning(f"Удален статический самоподписанный сертификат: {cert_path}")
+            logger.warning(f"⚠️ Удален статический самоподписанный сертификат: {cert_path}")
 
         if key_path.exists():
             key_path.unlink()
-            logger.warning(f"Удален статический приватный ключ: {key_path}")
+            logger.warning(f"⚠️ Удален статический приватный ключ: {key_path}")
 
         # Создание флага завершения миграции
         migration_flag.touch()
-        logger.info("Автоматическая миграция секретов завершена успешно")
-        logger.info("\n⚠️  ВАЖНО: Убедитесь, что переменная окружения AIFA_MASTER_KEY установлена в продакшене!")
+        logger.info("✅ Автоматическая миграция секретов завершена успешно")
+        logger.info("\n⚠️ ВАЖНО: Убедитесь, что переменная окружения AIFA_MASTER_KEY установлена в продакшене!")
         logger.info("   Для разработки временный ключ сгенерирован автоматически (действителен до перезапуска).")
 
     def audit_access(self, key: str, accessor: str, action: str):
@@ -582,16 +579,17 @@ class SecretVault:
 
         # Алерт при подозрительной активности
         if action == "read" and accessor not in ["system", "admin"]:
-            logger.warning(f"Подозрительный доступ к секрету '{key}' от {accessor}")
+            logger.warning(f"⚠️ Подозрительный доступ к секрету '{key}' от {accessor}")
             # Здесь можно добавить интеграцию с системой алертов
 
-        logger.debug(f"Аудит: {accessor} выполнил {action} для секрета {key}")
+        logger.debug(f"🔍 Аудит: {accessor} выполнил {action} для секрета {key}")
 
     def health_check(self) -> Dict[str, Any]:
         """Проверка здоровья хранилища секретов"""
         secrets_path = Path("data/secrets.json")
 
         return {
+            "status": "healthy",
             "master_key_available": self.master_key is not None,
             "vault_integration_enabled": self.vault_enabled,
             "secrets_cached": len(self.secrets_cache),
