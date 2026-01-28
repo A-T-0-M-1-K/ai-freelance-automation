@@ -1,0 +1,19 @@
+platform_name: "telegram_channels"
+type: "telegram"
+channels:
+  - "@freelance_jobs_ru"
+  - "@copywriting_jobs"
+  - "@design_orders"
+  - "@programming_jobs_ru"
+  - "@seo_orders"
+  - "@video_editing_jobs"
+keywords:
+  - "заказ"
+  - "нужен"
+  - "требуется"
+  - "ищу исполнителя"
+  - "срочно"
+anti_flood: true
+rate_limits:
+  messages_per_hour: 20
+check_interval_minutes: 5

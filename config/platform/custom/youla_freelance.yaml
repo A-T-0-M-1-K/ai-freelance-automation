@@ -1,0 +1,16 @@
+platform_name: "youla_freelance"
+base_url: "https://youla.ru"
+search_pattern: "/moskva/uslugi?q={query}"
+job_selector: "article.product_item"
+title_selector: "div.product_item__title"
+price_selector: "div.product_item__price"
+url_selector: "a.product_item__link"
+description_selector: "div.product_item__description"
+requires_selenium: false
+anti_detection: true
+rate_limits:
+  requests_per_minute: 5
+  requests_per_hour: 50
+currency: "RUB"
+min_budget: 500
+auth_method: "cookie"

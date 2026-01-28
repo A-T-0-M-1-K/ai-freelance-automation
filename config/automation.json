@@ -1,98 +1,84 @@
 {
-  "$schema": "schemas/automation_schema.json",
-  "version": "1.0.0",
-  "enabled": true,
-
-  "job_search": {
-    "interval_minutes": 5,
-    "max_platforms": 10,
-    "platforms": ["upwork", "freelance_ru", "kwork", "fiverr"],
-    "filters": {
-      "min_budget_usd": 10,
-      "max_competition_ratio": 0.7,
-      "allowed_categories": ["transcription", "translation", "copywriting", "editing", "proofreading"],
-      "exclude_keywords": ["urgent", "ASAP", "scam", "fake", "test job", "no budget"]
-    },
-    "ml_relevance_threshold": 0.85
+  "automation_level": {
+    "proposal_search": true,
+    "proposal_draft": true,
+    "proposal_approval_required": true,
+    "execution_draft": true,
+    "execution_approval_required": true,
+    "auto_reply_simple": true,
+    "auto_reply_complex": false,
+    "auto_payment_request": true,
+    "auto_withdrawal": false
   },
 
-  "decision_engine": {
-    "enable_risk_analysis": true,
-    "risk_tolerance": "medium",
-    "max_concurrent_jobs": 50,
-    "profitability_threshold_percent": 20,
-    "auto_decline_low_rating_clients": true,
-    "min_client_rating": 4.0,
-    "max_response_time_hours": 24
+  "transparency_settings": {
+    "disclose_ai_usage": true,
+    "show_transparency_report": true,
+    "include_ai_clause_in_contracts": true,
+    "client_notification_on_ai_assistance": false
   },
 
-  "bid_automation": {
-    "enable_ai_proposals": true,
-    "proposal_template_strategy": "adaptive",
-    "price_strategy": "value_based",
-    "default_markup_percent": 30,
-    "min_price_buffer_percent": 15,
-    "personalization_level": "high",
-    "avoid_duplicate_bids": true
+  "proposal_settings": {
+    "max_proposals_per_day": 15,
+    "min_budget_rub": 800,
+    "auto_reject_low_budget": true,
+    "approval_timeout_minutes": 10,
+    "platforms": ["upwork", "freelance_ru", "kwork", "habr_freelance", "profi_ru", "fiverr", "toptal", "linkedin_pro"],
+    "excluded_keywords": ["тестовое задание бесплатно", "студент", "дешево", "срочно дешево"]
   },
 
-  "client_communication": {
-    "enable_autonomous_messaging": true,
-    "response_delay_seconds": {
-      "min": 60,
-      "max": 900
-    },
-    "emotional_intelligence_enabled": true,
-    "sentiment_analysis_sensitivity": "high",
-    "multilingual_support": true,
-    "supported_languages": ["en", "ru", "es", "fr", "de", "pt", "zh", "ar"],
-    "max_daily_messages_per_client": 10
+  "execution_settings": {
+    "auto_generate_draft": true,
+    "auto_plagiarism_check": true,
+    "max_plagiarism_percent": 15,
+    "auto_quality_check": true,
+    "minimum_quality_score": 0.85,
+    "review_timeout_hours": 1,
+    "auto_submit_on_approval": true
   },
 
-  "task_execution": {
-    "parallel_task_limit": 20,
-    "quality_control_enabled": true,
-    "auto_retry_on_failure": true,
-    "max_retries": 3,
-    "fallback_model_on_error": true,
-    "intermediate_report_interval_minutes": 30
+  "communication_settings": {
+    "auto_reply_enabled": true,
+    "simple_questions_keywords": ["спасибо", "понял", "ок", "когда", "срок", "готово"],
+    "complex_questions_alert": true,
+    "revision_request_alert": true,
+    "payment_inquiry_auto_reply": true,
+    "response_time_limit_minutes": 60
   },
 
-  "delivery": {
-    "auto_format_output": true,
-    "supported_formats": ["txt", "docx", "pdf", "srt", "vtt", "json"],
-    "include_quality_report": true,
-    "auto_submit_on_completion": true
-  },
-
-  "payment": {
-    "auto_invoice_on_delivery": true,
-    "payment_reminder_schedule_hours": [24, 48, 72],
-    "accepted_payment_methods": ["stripe", "paypal", "yoomoney", "crypto_btc", "crypto_eth", "bank_transfer"],
-    "auto_confirm_payment": true,
+  "financial_settings": {
+    "auto_payment_request": true,
+    "min_withdrawal_amount": 10000,
+    "withdrawal_approval_required": true,
+    "auto_invoice_generation": true,
     "tax_calculation_enabled": true,
-    "default_tax_rate_percent": 13.0
+    "revenue_tracking_enabled": true
   },
 
-  "post_service": {
-    "request_review_after_hours": 24,
-    "auto_respond_to_feedback": true,
-    "offer_additional_services": true,
-    "client_retention_enabled": true
+  "monitoring_settings": {
+    "performance_tracking": true,
+    "client_satisfaction_monitoring": true,
+    "ban_risk_detection": true,
+    "quality_metrics_tracking": true,
+    "daily_report_generation": true,
+    "weekly_summary_enabled": true
   },
 
-  "self_healing": {
-    "auto_diagnose_interval_seconds": 60,
-    "auto_restart_failed_components": true,
-    "log_error_and_recover": true,
-    "escalate_unresolved_issues": true,
-    "max_recovery_attempts": 5
+  "safety_settings": {
+    "platform_compliance_check": true,
+    "human_in_the_loop_required": true,
+    "emergency_pause_on_risk": true,
+    "client_verification_required": true,
+    "suspicious_activity_alert": true,
+    "data_privacy_protection": true
   },
 
-  "logging": {
-    "log_decisions": true,
-    "log_communications": true,
-    "log_bid_details": true,
-    "anonymize_pii_in_logs": true
+  "optimization_settings": {
+    "ai_model_auto_selection": true,
+    "platform_priority_order": ["upwork", "toptal", "freelance_ru", "kwork", "habr_freelance", "profi_ru", "fiverr", "linkedin_pro"],
+    "budget_optimization_enabled": true,
+    "time_management_optimization": true,
+    "learning_from_feedback": true,
+    "continuous_improvement": true
   }
 }
